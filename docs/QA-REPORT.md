@@ -103,3 +103,28 @@ Día 7 la decisión sobre ampliar el equipo a 4–5 agentes para Beta 1.
 - **Decisión resuelta (2026-11-18):** C/D/F se diferencian a Beta 2 en `docs/ROADMAP.md`, respetando que Beta 1 no añade funciones nuevas.
 
 > ## ✅ ACEPTAR (con la observación de versión corregida y la decisión C/D/F pendiente)
+
+---
+
+# QA-REPORT — Beta 2 (0.6.x) «Portabilidad y distribución»
+
+**Verificador:** Agente 4 · **Rango:** `7596cd9..f1a67cf` · **Fecha:** 2026-11-18
+
+| Subtarea | Commit | Tests | py_compile | Smoke | Estado |
+|---|---|---|---|---|---|
+| B2-1 auditoría destructiva | `b176e7c` | 13 auditoría + 51 core | OK | OK | ACEPTAR |
+| B2-2 doctor + ayuda `?` | `f1a67cf` | 61 CLI/UI | OK | OK | ACEPTAR |
+| B2-3 stacks/fwupd/snapshots | `27f31fa` | 25 stacks | OK | OK | ACEPTAR |
+| B2-4 empaquetado y docs | `4f9f6dc` | py_compile + bash -n | OK | OK | ACEPTAR |
+| B2-5 verificación | — | **236 passed**, 0 fallos | OK | OK | ACEPTAR |
+
+**Criterios verificados:**
+1. Empaquetado presente para Debian/Arch/Fedora/FreeBSD (`packaging/`). ✅ documentado (no se ejecutaron builds)
+2. `?` abre ayuda contextual en 11 contextos. ✅ verificado con test dinámico
+3. Cero mensajes sin accionable en el checklist. ✅ documentado
+4. Auditoría con timestamp/actor/acción/destino/resultado y sanitización. ✅ 13 tests
+5. Stacks en lote y snapshots conservan `.bak-tm`. ✅ 25 tests simulados
+
+**Observación:** `pacman --version` imprime arte ASCII; el helper toma la primera línea con dígitos y funciona correctamente. Los CLI no instalados muestran «N/D [AVISO]» sin fallar.
+
+> ## ✅ ACEPTAR

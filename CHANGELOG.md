@@ -4,6 +4,25 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ---
 
+## [0.6.0-beta.2] — 2026-11-18 — Fase Beta 2 «Portabilidad y distribución» (completada)
+
+### Agregado
+- **B2-1**: `core/audit.py` con `AuditEntry`/`AuditLog` (timestamp ISO, actor,
+  acción, destino, resultado), inyección opcional en PackageManager y
+  ProcessMonitor, persistencia JSONL y sanitización de credenciales.
+- **B2-2**: `--doctor` consulta versión de apt/pacman/dnf/pkg/xbps-query con
+  timeout y fallback «N/D»; `?` abre ayuda contextual en 11 pantallas.
+- **B2-3**: Stacks por rol (dev/terminal/web), `fwupd_available()` (solo
+  detección) y snapshots con `.bak-tm` conservado, sin btrfs/zfs.
+- **B2-4**: `packaging/` con PKGBUILD, debian/, spec RPM y port FreeBSD;
+  INSTALL por plataforma sin placeholders.
+
+### Validación
+- **236 tests verdes**, py_compile OK, smoke y `--doctor` correctos.
+- paquetería no ejecutada (solo descriptores, sin builds ni publicación).
+
+---
+
 ## [0.5.0-beta.1] — 2026-11-18 — Fase Beta 1 «Pulido e integración» (completada)
 
 Sin funciones nuevas. Cuatro agentes en paralelo (Arquitecto, dos Implementadores

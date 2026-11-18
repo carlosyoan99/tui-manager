@@ -124,7 +124,7 @@ TUI-Manager/
 
 ## Estado
 
-**Beta 1 (0.5.0-beta.1)** — fase «Pulido e integración». La TUI con [textual](https://textual.textualize.io/) es funcional: paquetes, procesos, system, temas, actualizaciones, ajustes, ayuda, acerca de y logs, con degradación elegante por capacidades. Núcleo multi-SO (Linux, BSD, Termux) con 119 tests verdes. Ver [`CHANGELOG.md`](CHANGELOG.md) y [`docs/ROADMAP.md`](docs/ROADMAP.md) para el detalle de fases y criterios de salida.
+**Beta 2 (0.6.0-beta.2)** — fase «Portabilidad y distribución». La TUI con [textual](https://textual.textualize.io/) es funcional: paquetes, procesos, system, temas, actualizaciones, ajustes, ayuda, acerca de y logs, con degradación elegante por capacidades. Núcleo multi-SO (Linux, BSD, Termux) con 119 tests verdes. Ver [`CHANGELOG.md`](CHANGELOG.md) y [`docs/ROADMAP.md`](docs/ROADMAP.md) para el detalle de fases y criterios de salida.
 
 ## Licencia
 
