@@ -23,6 +23,12 @@ El ejecutable se instala como `tui-manager`. También puede lanzarse con
 > El rollback de una instalación fallida **nunca borra archivos del usuario**:
 > solo revierte directorios vacíos creados por el propio comando.
 
+> **Beta 3 — verificación multiplataforma:** la comprobación en las
+> distribuciones y gestores de ventanas objetivo se ejecuta durante Beta 3.
+> La **CI corre en Linux y FreeBSD** (`.github/workflows/ci.yml`); las
+> mediciones de arranque y refresco se registran en `tests/manual-checklist.md`.
+> Esto no implica paquetes publicados para todas esas plataformas.
+
 ---
 
 ## Debian / Ubuntu

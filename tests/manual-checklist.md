@@ -102,3 +102,40 @@ Recorrido manual por las **10 pantallas** del menú principal. Marcá cada paso 
 - [ ] Las 10 pantallas pasaron los criterios globales (<500 ms, sin traceback,
       confirmación en acciones destructivas).
 - [ ] No quedan ítems sin marcar ni incidencias anotadas.
+
+---
+
+## MEDICIÓN (Beta 3) — rendimiento y estabilidad
+
+Se ejecuta al cerrar Beta 3, en hardware modesto (≤ 8 GB RAM). Anotá el valor
+real medido en cada casilla; el umbral es **arranque < 2 s**, **refresco
+< 500 ms**, **5000 paquetes navegables** y **ningún bloqueo de la UI > 500 ms**.
+
+### Cómo medirlo
+
+```bash
+# 1) Arranque en frío: tiempo hasta imprimir la versión (proceso completo,
+#    sin llegar a lanzar la TUI). Repetir 3 veces y anotar el peor caso.
+time .venv/bin/python -m tui_manager.main --version
+
+# 2) Refresco, 5000 paquetes y ausencia de bloqueo: test automatizado de
+#    regresión de rendimiento (tests/test_perf.py, entregado en B3-1).
+#    Usa time.perf_counter() y fakes: sin subprocess reales ni tiempo real
+#    contra comandos del sistema.
+.venv/bin/python -m pytest -q tests/test_perf.py
+```
+
+- [ ] **Arranque < 2 s:** `time .venv/bin/python -m tui_manager.main --version`
+      tarda menos de 2 s (peor caso de 3 repeticiones: ______ s).
+- [ ] **Refresco < 500 ms:** el peor tiempo de refresco medido por el test de
+      rendimiento está por debajo de 500 ms (peor caso: ______ ms).
+- [ ] **5000 paquetes:** la lista de 5000 paquetes simulados se navega con
+      paginación y respuesta inmediata, sin bloqueo perceptible
+      (peor caso: ______ ms).
+- [ ] **Sin bloqueo > 500 ms:** ninguna llamada/subprocess bloquea el hilo de
+      la UI más de 500 ms; verificado por los tests de rendimiento y de
+      procesos en segundo plano (B3-1 / B3-2).
+- [ ] Repetidas las mediciones al menos 3 veces y anotado el **peor caso** en
+      cada casilla (no solo la media).
+- [ ] Suite automatizada completa en verde (**236 tests**) antes y después de
+      medir: `.venv/bin/python -m pytest -q`.
