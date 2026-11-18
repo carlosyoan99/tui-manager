@@ -6,6 +6,7 @@ Adapter para Debian y Ubuntu usando apt (formatos reales verificados):
 """
 
 import re
+import unicodedata
 import logging
 from typing import List
 from .package_adapter import PackageAdapter, Package, PackageNotFoundError
@@ -13,7 +14,29 @@ from .categories import CATEGORIES as _BASE_CATEGORIES, get_category as _shared_
 
 logger = logging.getLogger(__name__)
 
-RE_PKG_LINE = re.compile(r'^(\S+)/(\S+),now\s+([^\s]+)\s+([^\s]+)\s+\[(installed|upgradable)')
+# `apt list`: la suite puede venir con o sin ",now" (p. ej. bookworm/bookworm-updates).
+RE_PKG_LINE = re.compile(
+    r'^(\S+)/(\S+?)(?:,now)?\s+([^\s]+)\s+([^\s]+)\s+\[(installed|upgradable)')
+
+
+def _norm_key(key: str) -> str:
+    """Normaliza una cabecera de `apt show` a ASCII minúsculo (inglés/español)."""
+    ascii_key = unicodedata.normalize('NFKD', key).encode('ascii', 'ignore').decode()
+    return ' '.join(ascii_key.strip().lower().split())
+
+
+# Aliases de campos de `apt show` en inglés y español (LC_MESSAGES=es_ES).
+_KEY_ALIASES = {
+    'package': 'package', 'paquete': 'package',
+    'version': 'version',
+    'depends': 'depends', 'dependencias': 'depends', 'depende de': 'depends',
+    'description': 'description', 'descripcion': 'description',
+    'installed-size': 'size', 'tamano instalado': 'size',
+}
+
+
+def _field(key: str) -> str:
+    return _KEY_ALIASES.get(_norm_key(key), '')
 
 
 class DebianAdapter(PackageAdapter):
@@ -61,21 +84,23 @@ class DebianAdapter(PackageAdapter):
             raise PackageNotFoundError(f"Paquete '{package_name}' no encontrado")
 
         info = Package(name=package_name, installed=True)
-        capture_deps = False
         for line in stdout.split('\n'):
             stripped = line.strip()
-            if line.startswith((' ', '\t')) and capture_deps:
-                if stripped:
-                    info.dependencies.extend([d.strip() for d in stripped.split(',')])
-            elif stripped.startswith(('Depends:', 'Depends ')):
-                value = stripped.split(':', 1)[1].strip() if ':' in stripped else stripped
+            if ':' not in stripped:
+                continue
+            key, _, value = stripped.partition(':')
+            field = _field(key)
+            value = value.strip()
+            if not value:
+                continue
+            if field == 'depends':
                 info.dependencies.extend([d.strip() for d in value.split(',') if d.strip()])
-            elif stripped.startswith('Description'):
-                info.description = stripped.split(':', 1)[1].strip() if ':' in stripped else stripped
-            elif stripped.startswith('Version'):
-                info.version = stripped.split(':', 1)[1].strip() if ':' in stripped else stripped
-            elif stripped.startswith('Installed-Size'):
-                info.size = stripped.split(':', 1)[1].strip() if ':' in stripped else stripped
+            elif field == 'description':
+                info.description = value
+            elif field == 'version':
+                info.version = value
+            elif field == 'size':
+                info.size = value
         return info
 
     def install_package(self, package_name: str, confirm: bool = True) -> bool:

@@ -7,6 +7,7 @@ Adapter para Void Linux usando xbps. Formatos reales verificados:
 """
 
 import re
+import unicodedata
 import logging
 from typing import List
 from .package_adapter import PackageAdapter, Package, PackageNotFoundError
@@ -15,6 +16,28 @@ from .categories import CATEGORIES as _BASE_CATEGORIES, get_category as _shared_
 logger = logging.getLogger(__name__)
 
 RE_PKGVER = re.compile(r'^(?P<name>.+?)-(?P<version>[0-9][^\s]*)$')
+
+
+def _norm_key(key: str) -> str:
+    """Normaliza una cabecera de `xbps-query -S` a ASCII minúsculo (inglés/español)."""
+    ascii_key = unicodedata.normalize('NFKD', key).encode('ascii', 'ignore').decode()
+    return ' '.join(ascii_key.strip().lower().split())
+
+
+# Aliases de campos de `xbps-query -S` en inglés y español.
+_KEY_ALIASES = {
+    'architecture': 'architecture', 'arquitectura': 'architecture',
+    'version': 'version',
+    'description': 'description', 'descripcion': 'description',
+    'short_desc': 'description', 'short description': 'description',
+    'depends': 'depends', 'depends_on': 'depends',
+    'dependencias': 'depends', 'depende de': 'depends',
+    'installed-size': 'size', 'tamano instalado': 'size',
+}
+
+
+def _field(key: str) -> str:
+    return _KEY_ALIASES.get(_norm_key(key), '')
 
 
 def split_pkgver(token: str):
@@ -83,14 +106,13 @@ class VoidAdapter(PackageAdapter):
             if ':' not in stripped:
                 continue
             key, _, value = stripped.partition(':')
-            key, value = key.strip().lower(), value.strip()
-            if key in ('description', 'short_desc'):
+            field, value = _field(key), value.strip()
+            if field == 'description':
                 info.description = value
-            elif key == 'version':
+            elif field == 'version':
                 info.version = value
-            elif key in ('depends', 'depends_on'):
-                if value:
-                    info.dependencies = [d.strip() for d in value.split(',')]
+            elif field == 'depends' and value:
+                info.dependencies = [d.strip() for d in value.split(',')]
         return info
 
     def install_package(self, package_name: str, confirm: bool = True) -> bool:

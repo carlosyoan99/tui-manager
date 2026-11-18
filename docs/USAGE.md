@@ -260,6 +260,17 @@ Presiona `?` en cualquier pantalla para ver la ayuda específica de esa pantalla
 - Ejecuta `python main.py` en la terminal para ver errores específicos
 - Revisa los logs en `~/.tui-manager/logs/`
 
+## Mensajes de error y ayuda
+
+- **Toda acción fallida muestra un mensaje accionable**: indica qué salió mal y
+  qué podés hacer (revisar la fuente, confirmar la operación o reintentar). Nunca
+  se muestra un traceback al usuario.
+- Presioná `?` en cualquier pantalla para abrir la **ayuda contextual** de esa
+  pantalla.
+
+> Esta sección complementa a [Catálogo de apps y fuentes alternativas](#catálogo-de-apps-y-fuentes-alternativas),
+> que describe las fuentes de instalación; no sustituye sus avisos de confirmación.
+
 ## Atajos Rápidos
 
 ### En la pantalla de Gestión de Paquetes

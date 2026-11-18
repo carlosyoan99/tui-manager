@@ -8,6 +8,7 @@ Soporte limitado por diseño [TERMUX]:
   (a diferencia del adapter de Debian, que hace un subproceso por paquete).
 """
 
+import unicodedata
 import logging
 from typing import List
 
@@ -15,6 +16,26 @@ from .debian_adapter import DebianAdapter
 from .package_adapter import Package, PackageNotFoundError
 
 logger = logging.getLogger(__name__)
+
+
+def _norm_key(key: str) -> str:
+    """Normaliza estados/cabeceras a ASCII minúsculo (inglés/español)."""
+    ascii_key = unicodedata.normalize('NFKD', key).encode('ascii', 'ignore').decode()
+    return ' '.join(ascii_key.strip().lower().split())
+
+
+# Aliases del campo Status de `dpkg-query -W` (y variantes localizadas).
+_KEY_ALIASES = {
+    'install ok installed': 'installed',
+    'hold ok installed': 'installed',
+    'instalar ok instalado': 'installed',
+    'deinstall ok config-files': 'config-files',
+    'purge ok not-installed': 'not-installed',
+}
+
+
+def _field(key: str) -> str:
+    return _KEY_ALIASES.get(_norm_key(key), '')
 
 
 class TermuxAdapter(DebianAdapter):
@@ -39,11 +60,18 @@ class TermuxAdapter(DebianAdapter):
             if not line:
                 continue
             parts = line.split('\t')
-            if len(parts) < 3:
-                continue
-            name, version, status = parts[0], parts[1], parts[2]
-            # 'install ok installed' = instalado de verdad
-            if 'ok installed' not in status:
+            if len(parts) >= 3:
+                # `dpkg-query -W`: 'install ok installed' = instalado de verdad.
+                name, version = parts[0], parts[1]
+                if _field(parts[2]) != 'installed':
+                    continue
+            elif '/' in line:
+                # Formato real de `pkg list-installed`: "pkg/version".
+                name, _, version = line.partition('/')
+                name, version = name.strip(), version.split()[0] if version.split() else ''
+                if not name or not version:
+                    continue
+            else:
                 continue
             packages.append(Package(
                 name=name,
@@ -64,14 +92,24 @@ class TermuxAdapter(DebianAdapter):
         packages = []
         for line in stdout.split('\n'):
             line = line.strip()
-            if not line or line.lower().startswith(('listing', 'sorting', 'full text')):
+            # Cabeceras: "Listing... Done" / "Listado... Hecho" / "Ordenando...".
+            if not line or _norm_key(line).startswith(
+                    ('listing', 'sorting', 'full text', 'listado', 'orden', 'busqueda')):
                 continue
-            # Formato: name/description
+            # Formato real: name/version, name/suite version o name/description.
             if '/' in line:
-                name, _, description = line.partition('/')
+                name, _, rest = line.partition('/')
+                tokens = rest.split()
+                version = ''
+                description = rest.strip()
+                if tokens and tokens[0][:1].isdigit():
+                    version, description = tokens[0], ' '.join(tokens[1:])
+                elif len(tokens) > 1 and tokens[1][:1].isdigit():
+                    version, description = tokens[1], ' '.join(tokens[2:])
                 packages.append(Package(
                     name=name.strip(),
-                    description=description.strip(),
+                    version=version,
+                    description=description,
                     installed=False,
                 ))
         return packages
@@ -82,12 +120,13 @@ class TermuxAdapter(DebianAdapter):
             logger.error(f"Error al obtener actualizaciones: {stderr}")
             return []
         packages = []
-        for line in stdout.split('\n')[1:]:  # saltear header "Listing..."
-            if not line.strip():
+        for line in stdout.split('\n'):
+            # Saltea cabeceras ("Listing..." / "Listado...") y líneas vacías.
+            if '/' not in line:
                 continue
-            parts = line.split('/')
-            if parts:
-                packages.append(Package(name=parts[0].strip(), installed=True))
+            name = line.split('/', 1)[0].strip()
+            if name:
+                packages.append(Package(name=name, installed=True))
         return packages
 
     def _get_category_description(self, name: str) -> str:

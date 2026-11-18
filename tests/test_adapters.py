@@ -585,3 +585,136 @@ def test_base_adapter_orphans_noop():
     base = PackageAdapter()
     assert base.get_orphans() == []
     assert base.clean_orphans() is False
+
+
+# ---------------- Salidas reales/localizadas (B1-1) ----------------
+
+def test_debian_installed_localized_header_and_automatic(fake_runner):
+    """apt list --installed: cabecera en español y marcas [installed,automatic]."""
+    fake_runner.expect(['apt', 'list', '--installed'], stdout=(
+        "Listado... Hecho\n"
+        "curl/stable,now 8.5.0-2 amd64 [installed,automatic]\n"
+        "git/stable,now 1:2.39.2-1.1 amd64 [installed]\n"
+        "libfoo/stable,now 1.0-1 amd64\n"  # sin marca: no instalada
+    ))
+    pkgs = DebianAdapter().get_installed_packages()
+    assert [p.name for p in pkgs] == ['curl', 'git']
+    assert pkgs[0].version == '8.5.0-2'
+    assert pkgs[1].version == '1:2.39.2-1.1'
+    assert all(p.installed for p in pkgs)
+
+
+def test_debian_upgradable_without_now(fake_runner):
+    """apt list --upgradable real: la suite no siempre trae ',now'."""
+    fake_runner.expect(['apt', 'list', '--upgradable'], stdout=(
+        "Listing... Done\n"
+        "vim/stable 2:9.1.0-1 amd64 [upgradable from: 2:9.0.1000-3]\n"
+        "git/stable 1:2.40.1-1 amd64 [upgradable from: 1:2.39.2-1]\n"
+    ))
+    pkgs = DebianAdapter().get_updates_available()
+    assert [p.name for p in pkgs] == ['vim', 'git']
+    assert pkgs[0].version == '2:9.1.0-1'
+
+
+def test_debian_info_localized_and_description_md5(fake_runner):
+    """apt show con claves en español: Description-md5 no debe sobrescribir."""
+    fake_runner.expect(['apt', 'show', 'vim'], stdout=(
+        "Paquete: vim\n"
+        "Versión: 2:9.0.1000-3\n"
+        "Tamaño instalado: 3,400 kB\n"
+        "Dependencias: vim-runtime (= 2:9.0.1000-3), libgpm2\n"
+        "Descripción: Vi IMproved - editor vi mejorado\n"
+        "Homepage: https://www.vim.org\n"
+        "Description-md5: 1a2b3c4d5e6f\n"
+    ))
+    info = DebianAdapter().get_package_info('vim')
+    assert info.version == '2:9.0.1000-3'
+    assert info.description == 'Vi IMproved - editor vi mejorado'
+    assert info.size == '3,400 kB'
+    assert info.dependencies[0].startswith('vim-runtime')
+
+
+def test_void_installed_real_state_flags(fake_runner):
+    """xbps-query -l real: estados ii/i-, columnas alineadas y descripción."""
+    fake_runner.expect(['xbps-query', '-l'], stdout=(
+        "ii bash-5.2.26_1        The GNU Bourne Again shell\n"
+        "i- curl-8.9.1_2         Herramienta de línea de comandos\n"
+        "ii void-repo-nonfree-11_1\n"
+    ))
+    pkgs = VoidAdapter().get_installed_packages()
+    assert len(pkgs) == 3
+    assert pkgs[0].name == 'bash' and pkgs[0].version == '5.2.26_1'
+    assert 'Herramienta' in pkgs[1].description
+    assert pkgs[2].name == 'void-repo-nonfree' and pkgs[2].version == '11_1'
+
+
+def test_void_info_localized_fields(fake_runner):
+    """xbps-query -S con claves localizadas (Versión/Descripción/Dependencias)."""
+    fake_runner.expect(['xbps-query', '-S', 'curl'], stdout=(
+        "Arquitectura: x86_64\n"
+        "Versión: 8.9.1_2\n"
+        "Descripción: Herramienta de línea de comandos\n"
+        "Dependencias: libcurl>=8.9.1_1, openssl\n"
+    ))
+    info = VoidAdapter().get_package_info('curl')
+    assert info.version == '8.9.1_2'
+    assert 'Herramienta' in info.description
+    assert info.dependencies == ['libcurl>=8.9.1_1', 'openssl']
+
+
+def test_termux_installed_localized_status(fake_runner):
+    """dpkg-query -W: acepta estados hold y localizados como instalados."""
+    fake_runner.expect(
+        ['dpkg-query', '-W', '-f=${Package}\\t${Version}\\t${Status}\\n'], stdout=(
+        "7zip\t26.01\tinstalar ok instalado\n"
+        "git\t2.51.0\thold ok installed\n"
+        "vim\t9.0\tinstall ok installed\n"
+        "apt\t2.9.8\tinstall ok deinstall/config-files\n"
+    ))
+    pkgs = TermuxAdapter().get_installed_packages()
+    assert [p.name for p in pkgs] == ['7zip', 'git', 'vim']
+    assert all(p.installed for p in pkgs)
+
+
+def test_termux_installed_pkg_list_style(fake_runner):
+    """El parser tolera el formato 'pkg/version' que muestra `pkg list-installed`.
+
+    El comando del adapter no cambia (dpkg-query), pero la salida canned
+    verifica que las líneas pkg/version también se reconocen como instaladas.
+    """
+    fake_runner.expect(
+        ['dpkg-query', '-W', '-f=${Package}\\t${Version}\\t${Status}\\n'], stdout=(
+        "curl/8.9.1-1\n"
+        "git/2.51.0\n"
+        "Listado... Hecho\n"
+    ))
+    pkgs = TermuxAdapter().get_installed_packages()
+    assert [(p.name, p.version) for p in pkgs] == [
+        ('curl', '8.9.1-1'), ('git', '2.51.0')]
+    assert all(p.installed for p in pkgs)
+
+
+def test_termux_search_real_pkg_version(fake_runner):
+    """pkg search: cabecera en español y líneas name/version."""
+    fake_runner.expect(['pkg', 'search', 'curl'], stdout=(
+        "Búsqueda de texto completo... Hecho\n"
+        "curl/8.9.1-1\n"
+        "curlftpfs/0.9.2-9 Pequeño cliente FTP\n"
+    ))
+    pkgs = TermuxAdapter().search_packages('curl')
+    assert [(p.name, p.version) for p in pkgs] == [
+        ('curl', '8.9.1-1'), ('curlftpfs', '0.9.2-9')]
+    assert 'Pequeño' in pkgs[1].description
+    assert all(not p.installed for p in pkgs)
+
+
+def test_termux_upgrades_localized_header(fake_runner):
+    """apt list --upgradable: cabecera localizada no cuenta como paquete."""
+    fake_runner.expect(['apt', 'list', '--upgradable'], stdout=(
+        "Listado... Hecho\n"
+        "\n"
+        "vim/stable 9.0.1000 amd64 [upgradable from: 9.0.0]\n"
+    ))
+    pkgs = TermuxAdapter().get_updates_available()
+    assert len(pkgs) == 1 and pkgs[0].name == 'vim'
+

@@ -923,3 +923,10 @@ Excepción para errores de temas.
 - Los métodos que modifican el sistema requieren permisos de administrador
 - Los procesos se actualizan automáticamente cada `refresh_interval` segundos
 - La configuración se guarda automáticamente después de cada cambio
+- `InstallResult` (instalaciones desde fuentes alternativas) es **truthy/falsy**:
+  implementa `__bool__` devolviendo `ok`, por lo que `if result:` equivale a
+  `if result.ok:`. Expone `ok`, `app`, `source`, `returncode`, `actions` y `error`.
+- El rollback de una instalación fallida **nunca borra archivos del usuario**:
+  solo revierte directorios vacíos creados por el propio comando. Si un directorio
+  quedó con contenido, se deja intacto y se registra un aviso en el log para
+  limpieza manual.
