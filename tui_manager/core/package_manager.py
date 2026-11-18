@@ -4,6 +4,7 @@ Gestor principal de paquetes
 
 import logging
 from typing import List, Optional
+from .audit import AuditLog
 from .package_adapter import PackageAdapter, Package, PackageNotFoundError
 from .debian_adapter import DebianAdapter
 from .arch_adapter import ArchAdapter
@@ -19,16 +20,25 @@ logger = logging.getLogger(__name__)
 class PackageManager:
     """Gestor principal de paquetes"""
 
-    def __init__(self, distribution: str = None):
+    def __init__(self, distribution: str = None,
+                 audit_log: Optional[AuditLog] = None):
         """
         Inicializa el gestor de paquetes
 
         Args:
             distribution: Nombre de la distribución. Si es None, se detecta automáticamente
+            audit_log: Registro de auditoría opcional. Si es None no se registran
+                       acciones (comportamiento por defecto sin cambios).
         """
         self.distribution = distribution or self._detect_distribution()
         self.adapter = self._get_adapter()
+        self.audit_log = audit_log
         logger.info(f"PackageManager inicializado para distribución: {self.distribution}")
+
+    def _audit(self, action: str, target: str, result: bool) -> None:
+        """Registra una acción destructiva si se inyectó un AuditLog."""
+        if self.audit_log is not None:
+            self.audit_log.record(action, target, result)
 
     def _detect_distribution(self) -> str:
         """Detecta la distribución del sistema"""
@@ -139,8 +149,10 @@ class PackageManager:
         Returns:
             True si la instalación fue exitosa, False en caso contrario
         """
+        success = False
         try:
-            return self.adapter.install_package(package_name, confirm)
+            success = bool(self.adapter.install_package(package_name, confirm))
+            return success
         except PackageNotFoundError as e:
             logger.error(f"Paquete no encontrado: {e}")
             print(f"\n❌ Error: {e}")
@@ -149,6 +161,8 @@ class PackageManager:
             logger.error(f"Error al instalar {package_name}: {e}")
             print(f"\n❌ Error al instalar: {e}")
             return False
+        finally:
+            self._audit('install_package', package_name, success)
 
     def remove_package(self, package_name: str, confirm: bool = True) -> bool:
         """
@@ -161,8 +175,10 @@ class PackageManager:
         Returns:
             True si la desinstalación fue exitosa, False en caso contrario
         """
+        success = False
         try:
-            return self.adapter.remove_package(package_name, confirm)
+            success = bool(self.adapter.remove_package(package_name, confirm))
+            return success
         except PackageNotFoundError as e:
             logger.error(f"Paquete no encontrado: {e}")
             print(f"\n❌ Error: {e}")
@@ -171,6 +187,8 @@ class PackageManager:
             logger.error(f"Error al desinstalar {package_name}: {e}")
             print(f"\n❌ Error al desinstalar: {e}")
             return False
+        finally:
+            self._audit('remove_package', package_name, success)
 
     def update_package_cache(self) -> bool:
         """
@@ -276,8 +294,12 @@ class PackageManager:
 
     def clean_orphans(self, confirm: bool = True) -> bool:
         """Limpia huérfanos según el adapter de la distribución."""
+        success = False
         try:
-            return self.adapter.clean_orphans(confirm=confirm)
+            success = bool(self.adapter.clean_orphans(confirm=confirm))
+            return success
         except Exception as e:
             logger.error(f"Error al limpiar huérfanos: {e}")
             return False
+        finally:
+            self._audit('clean_orphans', self.distribution, success)

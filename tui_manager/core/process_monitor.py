@@ -7,6 +7,8 @@ import logging
 from typing import List, Optional
 from dataclasses import dataclass
 
+from .audit import AuditLog
+
 logger = logging.getLogger(__name__)
 
 
@@ -75,15 +77,24 @@ class ProcessNotFoundError(Exception):
 class ProcessMonitor:
     """Monitor de procesos"""
 
-    def __init__(self, refresh_interval: int = 2):
+    def __init__(self, refresh_interval: int = 2,
+                 audit_log: Optional[AuditLog] = None):
         """
         Inicializa el monitor de procesos
 
         Args:
             refresh_interval: Intervalo de actualización en segundos
+            audit_log: Registro de auditoría opcional. Si es None no se registran
+                       acciones (comportamiento por defecto sin cambios).
         """
         self.refresh_interval = refresh_interval
+        self.audit_log = audit_log
         logger.info(f"ProcessMonitor inicializado con intervalo de {refresh_interval}s")
+
+    def _audit(self, action: str, target: str, result: bool) -> None:
+        """Registra una acción destructiva si se inyectó un AuditLog."""
+        if self.audit_log is not None:
+            self.audit_log.record(action, target, result)
 
     def get_processes(self, filters: dict = None) -> List[Process]:
         """
@@ -173,17 +184,21 @@ class ProcessMonitor:
             True si el proceso fue terminado, False en caso contrario
         """
         cmd = ['kill', '-s', str(signal), str(pid)]
+        success = False
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode == 0:
+            completed = subprocess.run(cmd, capture_output=True, text=True)
+            if completed.returncode == 0:
                 logger.info(f"Proceso {pid} terminado con señal {signal}")
+                success = True
                 return True
             else:
-                logger.error(f"Error al terminar proceso {pid}: {result.stderr}")
+                logger.error(f"Error al terminar proceso {pid}: {completed.stderr}")
                 return False
         except Exception as e:
             logger.error(f"Error al enviar señal: {e}")
             return False
+        finally:
+            self._audit('kill_process', str(pid), success)
 
     def renice_process(self, pid: int, nice: int) -> bool:
         """
@@ -197,17 +212,21 @@ class ProcessMonitor:
             True si la prioridad fue cambiada, False en caso contrario
         """
         cmd = ['renice', str(nice), '-p', str(pid)]
+        success = False
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode == 0:
+            completed = subprocess.run(cmd, capture_output=True, text=True)
+            if completed.returncode == 0:
                 logger.info(f"Proceso {pid} prioridad cambiada a {nice}")
+                success = True
                 return True
             else:
-                logger.error(f"Error al cambiar prioridad: {result.stderr}")
+                logger.error(f"Error al cambiar prioridad: {completed.stderr}")
                 return False
         except Exception as e:
             logger.error(f"Error al cambiar prioridad: {e}")
             return False
+        finally:
+            self._audit('renice_process', str(pid), success)
 
     def get_total_cpu_usage(self) -> float:
         """
