@@ -16,6 +16,7 @@ import subprocess
 import logging
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Optional, Callable, Dict
 
 from .app_catalog import AppEntry
@@ -40,6 +41,21 @@ class InstallSource:
 
     def describe(self) -> str:
         return f"[{self.type.upper()}] {self.label}"
+
+
+@dataclass(frozen=True)
+class InstallResult:
+    """Resultado de una instalación: rastro auditable y compatible con bool."""
+    ok: bool
+    app: str
+    source: str
+    returncode: int
+    actions: tuple = ()
+    error: str = ""
+
+    def __bool__(self) -> bool:
+        """Mantiene compatibilidad con callers que hacen `if result:`."""
+        return self.ok
 
 
 class SourceError(Exception):
@@ -300,16 +316,18 @@ class AlternativeSourceManager:
     # ------------------------------------------------------------------
     # Instalación
     # ------------------------------------------------------------------
-    def install(self, app: AppEntry, package_installed: bool = False) -> bool:
+    def install(self, app: AppEntry,
+                package_installed: bool = False) -> InstallResult:
         """
         Instala una aplicación desde la fuente seleccionada.
 
         Returns:
-            True si se instaló correctamente, False si falló o se canceló.
+            InstallResult con detalle de la acción (truthy si tuvo éxito).
         """
         source = self.select_source(app, package_installed)
         if source is None:
-            return False
+            return InstallResult(False, app.name, 'none', -1,
+                                 error='InstallationCancelled')
 
         return self._execute_install(app, source)
 
@@ -335,36 +353,72 @@ class AlternativeSourceManager:
         else:
             logger.error('instalacion_fallo %s error=%s', base, self._tail(error))
 
-    def _execute_install(self, app: AppEntry, source: InstallSource) -> bool:
-        """Ejecuta la instalación con captura, timeout y logs auditable."""
+    def _rollback(self, actions: list) -> None:
+        """
+        Revierte SOLO directorios vacíos creados por este comando.
+
+        Nunca borra archivos del usuario: si el directorio quedó con contenido,
+        se deja intacto y se avisa en el log para limpieza manual.
+        """
+        for action in reversed(actions):
+            if action.get('type') != 'created_dir':
+                continue
+            try:
+                path = Path(action['path'])
+                if path.is_dir() and not any(path.iterdir()):
+                    path.rmdir()
+                    action['pending'] = False
+                    logger.info('rollback: directorio vacío eliminado %s', path)
+                elif path.exists():
+                    logger.warning(
+                        'rollback omitido (contenido creado por la fuente): %s', path)
+            except OSError as exc:
+                logger.warning('no se pudo revertir %s: %s', action['path'], exc)
+
+    def _execute_install(self, app: AppEntry,
+                         source: InstallSource) -> InstallResult:
+        """Ejecuta la instalación con captura, timeout, log y rollback mínimo."""
         command = source.command.copy()
         if source.requires_sudo:
             command.insert(0, 'sudo')
 
+        # Registrar el directorio destino de un git clone si no existía antes.
+        actions = []
+        if source.type == 'github' and len(command) >= 3 and command[1] == 'clone':
+            target = command[-1].rsplit('/', 1)[-1].removesuffix('.git')
+            target_path = Path.cwd() / target
+            if not target_path.exists():
+                actions.append({'type': 'created_dir',
+                                'path': str(target_path), 'pending': True})
+
+        actions.append({'type': 'executed', 'command': command[0]})
         started = time.monotonic()
+
+        def finish(ok, returncode, error=''):
+            self._log_result(app, source, ok=ok, returncode=returncode,
+                             started=started, error=error)
+            if not ok:
+                self._rollback(actions)
+            return InstallResult(
+                ok=ok, app=app.name, source=source.type, returncode=returncode,
+                actions=tuple(a['type'] for a in actions),
+                error=self._tail(error) if error else '',
+            )
+
         try:
             result = subprocess.run(
                 command, capture_output=True, text=True,
                 timeout=self.INSTALL_TIMEOUT,
             )
             ok = result.returncode == 0
-            self._log_result(
-                app, source, ok=ok, returncode=result.returncode,
-                started=started, error=result.stderr if not ok else '',
-            )
-            return ok
+            return finish(ok, result.returncode,
+                          '' if ok else result.stderr)
         except subprocess.TimeoutExpired:
-            self._log_result(app, source, ok=False, returncode=-1,
-                             started=started, error='timeout')
-            return False
+            return finish(False, -1, 'timeout')
         except FileNotFoundError:
-            self._log_result(app, source, ok=False, returncode=-1, started=started,
-                             error=f'herramienta no disponible: {command[0]}')
-            return False
+            return finish(False, -1, f'herramienta no disponible: {command[0]}')
         except Exception as exc:
-            self._log_result(app, source, ok=False, returncode=-1, started=started,
-                             error=str(exc))
-            return False
+            return finish(False, -1, str(exc))
 
     # ------------------------------------------------------------------
     # Utilidades para la TUI

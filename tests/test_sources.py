@@ -239,7 +239,7 @@ def test_execute_install_captures_output_and_timeout(monkeypatch, caplog):
     source = InstallSource('github', 'x/y', 'x',
                            ['git', 'clone', 'https://github.com/x/y.git'])
 
-    assert mgr._execute_install(get_app_by_name('btop'), source) is True
+    assert bool(mgr._execute_install(get_app_by_name('btop'), source)) is True
     assert len(calls) == 1
     assert calls[0][1]['capture_output'] is True
     assert calls[0][1]['text'] is True
@@ -268,7 +268,7 @@ def test_execute_install_logs_failure_with_tail(monkeypatch, caplog):
     source = InstallSource('flatpak', 'org.x.Y', 'x',
                            ['flatpak', 'install', '-y', 'org.x.Y'])
 
-    assert mgr._execute_install(get_app_by_name('firefox'), source) is False
+    assert bool(mgr._execute_install(get_app_by_name('firefox'), source)) is False
     assert 'instalacion_fallo' in caplog.text
     assert 'returncode=7' in caplog.text
     assert 'exit_code=1' in caplog.text
@@ -282,3 +282,68 @@ def test_requires_sudo_alias_backwards_compatible():
     s = InstallSource('repo', 'apt', 'apt', ['apt'], requires_sudo=True)
     assert s.requires_sudo is True
     assert s.Requires_sudo is True
+
+
+# ------------------------------------------------ ST-3: InstallResult ----
+
+@pytest.mark.parametrize('src_type,command', [
+    ('repo', ['apt', 'install', '-y', 'foo']),
+    ('github', ['git', 'clone', 'https://github.com/x/foo.git']),
+    ('flatpak', ['flatpak', 'install', '-y', 'org.x.Foo']),
+    ('snap', ['snap', 'install', 'foo']),
+    ('appimage', ['wget', 'https://example.com/Foo.AppImage']),
+])
+def test_install_result_on_failure_for_every_source(monkeypatch, src_type, command,
+                                                    tmp_path):
+    """Fallo simulado en cada fuente: ok False, error y returncode correctos."""
+    import subprocess
+    from types import SimpleNamespace
+    from tui_manager.core.alternative_sources import InstallSource, InstallResult
+
+    monkeypatch.chdir(tmp_path)
+
+    def spy(cmd, **kwargs):
+        return SimpleNamespace(returncode=9, stdout='', stderr='fallo simulado')
+
+    monkeypatch.setattr(subprocess, 'run', spy)
+    mgr = AlternativeSourceManager()
+    source = InstallSource(src_type, 'foo', 'foo', command)
+
+    result = mgr._execute_install(get_app_by_name('firefox'), source)
+    assert isinstance(result, InstallResult)
+    assert result.ok is False and bool(result) is False
+    assert result.returncode == 9
+    assert result.error
+    assert result.source == src_type
+    # rollback conservador: nunca deja directorios creados por el fallo
+    assert not any(tmp_path.iterdir())
+
+
+def test_install_result_on_success_has_actions(monkeypatch, tmp_path):
+    """Éxito: ok True, actions con la ejecución registrada."""
+    import subprocess
+    from types import SimpleNamespace
+    from tui_manager.core.alternative_sources import InstallSource, InstallResult
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        subprocess, 'run',
+        lambda cmd, **kw: SimpleNamespace(returncode=0, stdout='ok', stderr=''))
+
+    mgr = AlternativeSourceManager()
+    source = InstallSource('flatpak', 'org.x.Foo', 'foo',
+                           ['flatpak', 'install', '-y', 'org.x.Foo'])
+    result = mgr._execute_install(get_app_by_name('firefox'), source)
+    assert isinstance(result, InstallResult)
+    assert result.ok is True and bool(result) is True
+    assert result.returncode == 0
+    assert len(result.actions) >= 1
+    assert result.error == ''
+
+
+def test_install_result_bool_keeps_existing_callers():
+    """Los callers que hacen `if ok:` siguen funcionando."""
+    from tui_manager.core.alternative_sources import InstallResult
+    ok = InstallResult(True, 'app', 'repo', 0)
+    bad = InstallResult(False, 'app', 'repo', 1, error='x')
+    assert ok and not bad

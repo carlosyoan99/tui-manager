@@ -14,7 +14,7 @@ from .app_catalog import (
     get_all_categories, CATEGORIES,
 )
 from .alternative_sources import (
-    AlternativeSourceManager, InstallSource,
+    AlternativeSourceManager, InstallSource, InstallResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ class SourcesAdapter:
         self.manager.set_preferred_format(fmt)
 
     # --- instalación ---
-    def install(self, app: AppEntry, source: InstallSource) -> bool:
+    def install(self, app: AppEntry, source: InstallSource) -> InstallResult:
         """
         Instala una app desde una fuente concreta.
 

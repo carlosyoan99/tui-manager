@@ -1405,11 +1405,13 @@ class AppsScreen(Screen):
             lambda: setattr(self.query_one('#apps-loading', LoadingIndicator),
                             'display', True))
         try:
-            ok = self.adapter.install(app, source)
-            msg = t('apps.install_ok', name=app.name,
-                    source=source.type) if ok else t('packages.action_failed')
+            result = self.adapter.install(app, source)
+            if result.ok:
+                msg = t('apps.install_ok', name=app.name, source=source.type)
+            else:
+                msg = f'{t("packages.action_failed")}: {result.error or "—"}'
             self.app.call_from_thread(self.notify, msg,
-                                      severity='information' if ok else 'error')
+                                      severity='information' if result.ok else 'error')
             self.app.call_from_thread(self._reload)
         except Exception as exc:
             logger.exception('instalación desde fuente falló')
