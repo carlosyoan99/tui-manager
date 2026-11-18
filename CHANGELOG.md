@@ -4,16 +4,24 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ---
 
-## [0.1.0-alpha.1] — En desarrollo — Fase Alfa 1 «Núcleo usable»
+## [0.1.0-alpha.1] — 2026-11-18 — Fase Alfa 1 «Núcleo usable» (completada)
 
-Objetivo de la versión: la TUI arranca y hace bien tres cosas (paquetes, procesos, temas internos), sin adaptadores de entorno.
+Objetivo de la versión: la TUI arranca y hace bien tres cosas (paquetes, procesos, temas internos), sin adaptadores de entorno. **Cumplido:** suite 88/88 verde + smoke en vivo en Termux (338 paquetes reales renderizados, navegación completa).
 
-### En progreso
-- Capa UI con textual: `ScreenManager`, `MainMenuScreen`, `PackageManagerScreen`, `ProcessMonitorScreen`, `SettingsScreen`, `HelpScreen` (pendiente de implementar; `main.py` ya importa `tui_manager.ui.screens`).
-- `tui-manager --version` y `--doctor`.
+### Agregado
+- **Capa UI textual** (`tui_manager/ui/`): `TuiManagerApp` + `Services` (inyección de dependencias para tests) y pantallas `MainMenuScreen`, `PackagesScreen` (DataTable: listar/buscar/instalar/remover/info/caché con modales de confirmación), `ProcessesScreen` (refresco por intervalo configurable, kill SIGTERM/SIGKILL, renice, pausa, filtro), `SettingsScreen` (tema interno dark/light/retro aplicado a textual, idioma, intervalo) y `HelpScreen`.
+- Menú con **degradación elegante**: entradas Sistema (→ Alfa 2), Temas y Actualizar (→ Beta 1) visibles pero deshabilitadas, con la fase en la que llegan.
+- Temas internos de `ThemeManager` registrados como temas de textual (`tm-dark`, `tm-light`, `tm-retro`).
+- `main.py` reescrito: `argparse` con `--version`, `--doctor` (informe de SO, distro, gestor, entorno de escritorio, capacidades, elevación, Python, textual y config) y `--lang es|en`; sin banner ni flujo lineal antiguo.
+- i18n: clave nueva `menu.coming_soon` (es/en).
+- Tests de UI: `tests/test_ui.py` (11 tests con `run_test()` y fakes inyectados: menú, navegación, búsqueda, instalar/cancelar, kill, renice, ajustes, ayuda) y `tests/test_cli.py` (4 tests de CLI).
+
+### Cambiado
+- Versión del paquete: `0.1.0-alpha.1`.
 
 ### Simulación y validación
-- Suite de pruebas con **subprocesos simulados** (salidas reales canned de apt/pacman/dnf/xbps/pkg/pkgin/dpkg): 73 tests verdes.
+- Suite de pruebas con **subprocesos simulados** (salidas reales canned de apt/pacman/dnf/xbps/pkg/pkgin/dpkg): **88 tests verdes** (73 núcleo/adapters + 11 UI + 4 CLI).
+- Validación **en vivo en Termux/Android**: `--doctor` detecta termux → TermuxAdapter → TermuxEnvironmentAdapter (capacidad `launch_app`); smoke headless de la TUI real con `run_test()` — 338 paquetes reales en la tabla y navegación menú↔aplicaciones correcta.
 - Bugs corregidos gracias a la simulación: parsers de formato real (Arch `-Qi`/`-Ss`, Debian `apt search`, Fedora `dnf check-update` rc=100, Void `-l`/`-Rs`/`-S`), bloque de `pacman -Qi` perdido por línea en blanco, columnas corridas de `ps aux`, sudo innecesario en comandos de solo lectura, imports faltantes de `Package`, bloqueo por `_get_description` con un subproceso por paquete (eliminado).
 
 ### Documentación

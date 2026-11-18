@@ -70,6 +70,7 @@ STRINGS: dict[str, dict[str, str]] = {
         'menu.about.desc': 'Info del sistema: SO, kernel, RAM, disco, batería',
         'menu.logs': 'Logs',
         'menu.logs.desc': 'Ver el log de la aplicación',
+        'menu.coming_soon': 'disponible en {phase}',
 
         # Paquetes
         'packages.title': 'Gestión de aplicaciones',
@@ -237,6 +238,7 @@ STRINGS: dict[str, dict[str, str]] = {
         'menu.about.desc': 'System info: OS, kernel, RAM, disk, battery',
         'menu.logs': 'Logs',
         'menu.logs.desc': 'View the application log',
+        'menu.coming_soon': 'available in {phase}',
 
         'packages.title': 'Application management',
         'packages.installed_list': 'Installed',

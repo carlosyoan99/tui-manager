@@ -1,104 +1,147 @@
 #!/usr/bin/env python3
 """
-TUI Manager - Gestor de Paquetes y Procesos TUI para Linux
+TUI Manager — punto de entrada.
 
-Interfaz de usuario terminal para gestionar paquetes, instalar/desinstalar
-aplicaciones y monitorear procesos en tiempo real.
+Uso:
+    tui-manager            lanza la interfaz TUI
+    tui-manager --version  imprime la versión
+    tui-manager --doctor   diagnóstico del entorno (SO, distro, gestor,
+                           entorno de escritorio, capacidades, elevación)
+    tui-manager --lang es  fuerza el idioma (es|en) para esta ejecución
 
-Inspiration: Omarchy Quattro
+Inspired: Omarchy Quattro. Portable: Linux, BSD y Termux (limitado).
 """
 
-import sys
-import os
+from __future__ import annotations
+
+import argparse
 import logging
-from pathlib import Path
+import platform
+import shutil
+import sys
 
-# Añadir el directorio raíz al path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from tui_manager.core.distribution import DistributionDetector
-from tui_manager.core.package_manager import PackageManager
-from tui_manager.core.process_monitor import ProcessMonitor
-from tui_manager.core.theme_manager import ThemeManager
+from tui_manager import __version__
 from tui_manager.core.config import Config
-from tui_manager.ui.screens import ScreenManager
+from tui_manager.core.distribution import DistributionDetector, DistributionError
+from tui_manager.core.environment import EnvironmentDetector
+from tui_manager.i18n import DEFAULT_LANGUAGE, available_languages, set_language, t
 from tui_manager.utils.logger import setup_logger
 
 
-def main():
-    """Punto de entrada principal de la aplicación"""
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog='tui-manager',
+        description='Panel de control portable para la terminal '
+                    '(inspirado en Omarchy).')
+    parser.add_argument('--version', action='store_true',
+                        help='muestra la versión y sale')
+    parser.add_argument('--doctor', action='store_true',
+                        help='diagnóstico del entorno y sale')
+    parser.add_argument('--lang', choices=available_languages(), default=None,
+                        help='idioma de la interfaz (por defecto: config)')
+    return parser
 
-    # Configurar logging
-    logger = setup_logger('TUI-Manager')
+
+def run_doctor() -> str:
+    """Devuelve el informe de diagnóstico como texto multi-línea."""
+    config = Config()
+    lines = [f'{t("app.title")} — {t("doctor.title")}']
+
+    def add(label, value, warn=False):
+        state = t('doctor.warn') if warn else t('doctor.ok')
+        lines.append(f'{label:<22} {value}  [{state}]')
+
+    add(t('doctor.os'), f'{platform.system()} {platform.release()} '
+        f'({platform.machine()})')
+    try:
+        distro = DistributionDetector.detect()
+        add(t('doctor.distro'), distro)
+    except DistributionError as exc:
+        add(t('doctor.distro'), str(exc), warn=True)
+        distro = None
+
+    if distro:
+        try:
+            from tui_manager.core.package_manager import PackageManager
+            pm = PackageManager(distribution=distro)
+            add(t('doctor.pm'), f'{distro} → {type(pm.adapter).__name__}')
+        except Exception as exc:
+            add(t('doctor.pm'), str(exc), warn=True)
 
     try:
-        # Verificar versión de Python
+        env = EnvironmentDetector.detect()
+        caps = ', '.join(sorted(c.name.lower() for c in env.capabilities())) or '—'
+        add(t('doctor.env'), type(env).__name__)
+        add(t('doctor.caps'), caps)
+    except Exception as exc:
+        add(t('doctor.env'), str(exc), warn=True)
+
+    add(t('doctor.sudo'), shutil.which('sudo') or 'no (root directo/termux)',
+        warn=shutil.which('sudo') is None and platform.system() == 'Linux'
+        and not _is_termux())
+    add(t('doctor.python'), sys.version.split()[0])
+
+    try:
+        import textual
+        add(t('doctor.textual'), textual.__version__)
+    except Exception as exc:
+        add(t('doctor.textual'), str(exc), warn=True)
+
+    exists = __import__('os').path.exists(config.config_file)
+    add(t('doctor.cfg'), f'{config.config_file} '
+        f'({"sí" if exists else "no (defaults)"})')
+    return '\n'.join(lines)
+
+
+def _is_termux() -> bool:
+    return bool(__import__('os').environ.get('TERMUX_VERSION'))
+
+
+def main(argv=None) -> int:
+    """Punto de entrada; devuelve el código de salida."""
+    args = build_parser().parse_args(argv)
+
+    if args.version:
+        print(f'tui-manager {__version__}')
+        return 0
+
+    config = Config()
+    set_language(args.lang or config.get('language', DEFAULT_LANGUAGE))
+
+    if args.doctor:
+        setup_logger('TUI-Manager')
+        print(run_doctor())
+        return 0
+
+    # Arranque normal de la TUI
+    logger = setup_logger('TUI-Manager')
+    try:
+        from tui_manager.ui.app import Services, TuiManagerApp
+
         if sys.version_info < (3, 10):
-            print("Error: TUI Manager requiere Python 3.10 o superior")
-            print(f"Versión actual: {sys.version}")
-            sys.exit(1)
+            print('Error: TUI Manager requiere Python 3.10 o superior')
+            return 1
 
-        logger.info("Iniciando TUI Manager")
+        logger.info('Iniciando TUI Manager %s', __version__)
+        services = Services.detect(config=config)
+        logger.info('Distribución: %s | Entorno: %s',
+                    services.distribution,
+                    type(services.environment).__name__)
+        TuiManagerApp(services).run()
+        return 0
 
-        # Detectar distribución
-        logger.info("Detectando distribución...")
-        distribution = DistributionDetector.detect()
-        logger.info(f"Distribución detectada: {distribution}")
-
-        # Verificar si la distribución es soportada
-        if not DistributionDetector.is_supported():
-            logger.warning("Tu distribución no es soportada")
-            logger.warning("Distribuciones soportadas: Debian, Ubuntu, Arch, Fedora, Void, Gentoo, OpenSUSE, Alpine")
-            print("\n" + "="*60)
-            print("⚠️  ADVERTENCIA")
-            print("="*60)
-            print("Tu distribución no es soportada.")
-            print("Las siguientes distribuciones están soportadas:")
-            print("  • Debian y derivados (Ubuntu, Linux Mint, etc.)")
-            print("  • Arch Linux y derivados (Manjaro, EndeavourOS, etc.)")
-            print("  • Fedora y derivados (RHEL, CentOS Stream, etc.)")
-            print("  • Void Linux")
-            print("  • Gentoo")
-            print("  • OpenSUSE")
-            print("  • Alpine Linux")
-            print("\n" + "="*60)
-            input("Presiona Enter para continuar o Ctrl+C para salir...")
-
-        # Crear instancias de los módulos principales
-        logger.info("Inicializando componentes...")
-        package_manager = PackageManager(distribution=distribution)
-        process_monitor = ProcessMonitor()
-        theme_manager = ThemeManager()
-        config = Config()
-        screen_manager = ScreenManager()
-
-        # Mostrar pantalla de bienvenida
-        print("\n" + "="*60)
-        print("🚀 TUI Manager v0.1.0")
-        print("="*60)
-        print(f"Distribución: {distribution}")
-        print(f"Python: {sys.version.split()[0]}")
-        print(f"Tema: {theme_manager.get_current_theme()}")
-        print("="*60 + "\n")
-
-        # Iniciar la interfaz
-        logger.info("Iniciando interfaz TUI")
-        screen_manager.run()
-
+    except DistributionError as exc:
+        print(f'{t("common.error")}: distribución no soportada ({exc})')
+        print('Soportadas: debian, arch, fedora, void, freebsd, pkgsrc, termux')
+        return 1
     except KeyboardInterrupt:
-        logger.info("Aplicación cerrada por el usuario")
-        print("\n\nSaliendo...")
-        sys.exit(0)
-
-    except Exception as e:
-        logger.error(f"Error crítico: {e}", exc_info=True)
-        print("\n" + "="*60)
-        print("❌ ERROR CRÍTICO")
-        print("="*60)
-        print(f"Ocurrió un error: {e}")
-        print("="*60 + "\n")
-        sys.exit(1)
+        logger.info('Cerrado por el usuario')
+        return 0
+    except Exception:
+        logger.exception('Error crítico')
+        print(f'{t("common.error")}: revisa el log de la aplicación')
+        return 1
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
