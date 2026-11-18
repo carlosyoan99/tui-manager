@@ -170,6 +170,25 @@ async def test_main_menu_all_entries_enabled(tmp_path, monkeypatch):
         assert not any('disabled' in i.classes for i in items)
         assert app.screen.query_one('#menu').index == 0
         assert app.focused is app.screen.query_one('#menu')
+        # Cada entrada muestra su atajo al inicio (1-9 y 0 para la 10ª)
+        from textual.widgets import Static
+        from tui_manager.ui.screens import MainMenuScreen
+        for index, item in enumerate(items):
+            text = item.query_one(Static).content
+            assert text.startswith(f'[{MainMenuScreen.shortcut(index)}]')
+
+
+@pytest.mark.asyncio
+async def test_main_menu_shortcut_zero_opens_apps(tmp_path, monkeypatch):
+    """El atajo 0 abre el catálogo de apps (10ª entrada)."""
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press('0')
+        await pilot.pause()
+        from tui_manager.ui.screens import AppsScreen
+        assert isinstance(app.screen, AppsScreen)
 
 
 @pytest.mark.asyncio
@@ -702,3 +721,37 @@ async def test_apps_screen_install_shows_source_selection(tmp_path, monkeypatch)
         # Con múltiples variantes aparece el modal de selección (o el de
         # confirmación si solo hay una fuente oficial).
         assert isinstance(app.screen, (SelectScreen, type(app.screen)))
+
+
+@pytest.mark.asyncio
+async def test_about_screen_shows_extended_info(tmp_path, monkeypatch):
+    """Acerca de muestra secciones de software y hardware."""
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        from tui_manager.ui.screens import AboutScreen
+        app.push_screen(AboutScreen(services))
+        await pilot.pause()
+        await _wait_workers(app, pilot)
+        from textual.widgets import Static, LoadingIndicator
+        text = app.screen.query_one('#about-text', Static).content
+        assert 'SOFTWARE' in text and 'HARDWARE' in text
+        assert 'Python' in text and 'CPU' in text and 'RAM' in text
+        # El indicador de carga se oculta al terminar
+        assert app.screen.query_one('#about-loading', LoadingIndicator).display is False
+
+
+@pytest.mark.asyncio
+async def test_settings_shows_help_labels(tmp_path, monkeypatch):
+    """Cada opción de ajustes explica para qué sirve."""
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        from tui_manager.ui.screens import SettingsScreen
+        app.push_screen(SettingsScreen(services))
+        await pilot.pause()
+        from textual.widgets import Static
+        hints = [w.content for w in app.screen.query(Static)
+                 if 'hint' in w.classes]
+        assert len(hints) >= 3
+        assert any('procesos' in h.lower() for h in hints)

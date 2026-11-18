@@ -538,3 +538,18 @@ def test_package_manager_orphans_passthrough():
     pm.adapter = BrokenAdapter()
     assert pm.get_orphans() == []
     assert pm.clean_orphans(confirm=False) is False
+
+
+def test_sysinfo_extended_fields(monkeypatch):
+    """Acerca de expone campos amplios de hardware y software."""
+    import tui_manager.core.sysinfo as si
+    info = si.collect(distribution='arch',
+                      environment=type('E', (), {'name': 'sway'})())
+    expected = ('hostname', 'user', 'platform', 'arch', 'python', 'shell',
+                'term', 'uptime', 'cpu_model', 'cpu_logical', 'cpu_physical',
+                'ram_total', 'ram_available', 'swap', 'disk_total',
+                'disk_used', 'disk_free', 'disk_percent')
+    for key in expected:
+        assert key in info, f'falta campo {key}'
+    assert info['cpu_logical'] >= 1
+    assert isinstance(info['disk_percent'], int)

@@ -31,6 +31,7 @@ from textual.widgets import (
     Label,
     ListItem,
     ListView,
+    LoadingIndicator,
     Select,
     Static,
 )
@@ -64,9 +65,15 @@ class MainMenuScreen(Screen):
     BINDINGS = [
         Binding('escape', 'app.quit', t('common.quit')),
     ] + [
-        Binding(str(index + 1), f'quick("{entry_id}")', show=False)
+        Binding('0' if index == 9 else str(index + 1),
+                f'quick("{entry_id}")', show=False)
         for index, (entry_id, _) in enumerate(ENTRIES)
     ]
+
+    @staticmethod
+    def shortcut(index: int) -> str:
+        """Tecla de atajo para la entrada `index` (1-9, y 0 para la 10ª)."""
+        return '0' if index == 9 else str(index + 1)
 
     def __init__(self, services: Services):
         super().__init__()
@@ -82,10 +89,12 @@ class MainMenuScreen(Screen):
     def on_mount(self) -> None:
         menu = self.query_one('#menu', ListView)
         menu.clear()
-        for entry_id, _ in self.ENTRIES:
+        for index, (entry_id, _) in enumerate(self.ENTRIES):
             label = t(f'menu.{entry_id}')
             desc = t(f'menu.{entry_id}.desc')
-            menu.append(ListItem(Static(f'{label} — {desc}'), id=entry_id))
+            key = self.shortcut(index)
+            menu.append(ListItem(
+                Static(f'[{key}] {label} — {desc}', markup=False), id=entry_id))
         if self.ENTRIES:
             menu.index = 0
         menu.focus()
@@ -139,6 +148,7 @@ class PackagesScreen(Screen):
         yield Label(f'[b]{t("packages.title")}[/] ({self.services.distribution})',
                     classes='title')
         yield Input(placeholder=t('common.search'), id='search')
+        yield LoadingIndicator(id='packages-loading')
         yield DataTable(id='packages-table')
         yield Static(t('packages.keys'), id='packages-status', classes='status', markup=False)
         yield Footer()
@@ -149,6 +159,7 @@ class PackagesScreen(Screen):
         table.add_columns(t('common.name'), t('common.version'),
                           t('common.installed'), t('common.description'))
         table.focus()
+        self.query_one('#packages-loading', LoadingIndicator).display = True
         self.load_installed()
 
     @work(thread=True, exclusive=True)
@@ -158,6 +169,7 @@ class PackagesScreen(Screen):
 
     @work(thread=True, exclusive=True)
     def load_search(self, query: str) -> None:
+        self.query_one('#packages-loading', LoadingIndicator).display = True
         packages = self.services.package_manager.search_package(query)
         self.app.call_from_thread(self._fill, packages, t('packages.search_results'))
 
@@ -169,6 +181,10 @@ class PackagesScreen(Screen):
             table.add_row(pkg.name, pkg.version,
                           '✓' if pkg.installed else '',
                           pkg.description or '')
+        try:
+            self.query_one('#packages-loading', LoadingIndicator).display = False
+        except Exception:
+            pass
         self.query_one('#packages-status', Static).update(
             f'{origin}: {len(self._packages)} — {t("packages.keys")}')
 
@@ -219,6 +235,9 @@ class PackagesScreen(Screen):
 
     @work(thread=True, exclusive=False)
     def _run_action(self, pkg, action: str) -> None:
+        self.app.call_from_thread(
+            lambda: setattr(self.query_one('#packages-loading', LoadingIndicator),
+                            'display', True))
         try:
             if action == 'install':
                 ok = self.services.package_manager.install_package(pkg.name, confirm=False)
@@ -441,6 +460,8 @@ class SettingsScreen(Screen):
         yield Header(show_clock=True)
         yield Label(f'[b]{t("settings.title")}[/]', classes='title')
         yield VerticalScroll(
+            Label(f'[b]{t("settings.tui_theme")}[/]'),
+            Static(t('settings.theme_help'), classes='hint', markup=False),
             Select(
                 [(name, name) for name in self.services.theme_manager.THEMES],
                 value=self.services.config.get('theme', 'dark'),
@@ -448,6 +469,8 @@ class SettingsScreen(Screen):
                 prompt=t('settings.tui_theme'),
                 allow_blank=False,
             ),
+            Label(f'[b]{t("common.language")}[/]'),
+            Static(t('settings.language_help'), classes='hint', markup=False),
             Select(
                 [('Español', 'es'), ('English', 'en')],
                 value=self.services.config.get('language', 'es'),
@@ -455,6 +478,8 @@ class SettingsScreen(Screen):
                 prompt=t('common.language'),
                 allow_blank=False,
             ),
+            Label(f'[b]{t("settings.refresh_interval")}[/]'),
+            Static(t('settings.interval_help'), classes='hint', markup=False),
             Input(value=str(self.services.config.get('refresh_interval', 2)),
                   id='input-interval', placeholder=t('settings.refresh_interval')),
             Static(t('settings.termux_note'), id='settings-note', classes='status', markup=False),
@@ -1032,7 +1057,7 @@ class SystemScreen(Screen):
 # ------------------------------------------------------------ Acerca de ----
 
 class AboutScreen(Screen):
-    """B · Info del sistema: SO, kernel, RAM, disco, batería, N paquetes."""
+    """B · Info detallada del sistema: software y hardware."""
 
     BINDINGS = [('escape', 'back', t('common.back'))]
 
@@ -1044,10 +1069,13 @@ class AboutScreen(Screen):
         yield Header(show_clock=True)
         yield Label(f'[b]{t("about.title")}[/]', classes='title')
         with VerticalScroll():
+            yield LoadingIndicator(id='about-loading')
             yield Static(t('common.loading'), id='about-text', markup=False)
         yield Footer()
 
     def on_mount(self) -> None:
+        self.query_one('#about-loading', LoadingIndicator).display = True
+        self.query_one('#about-text', Static).update('')
         self._collect()
 
     @work(thread=True, exclusive=True)
@@ -1061,28 +1089,56 @@ class AboutScreen(Screen):
         )
         self.app.call_from_thread(self._fill, info)
 
+    @staticmethod
+    def _line(label: str, value) -> str:
+        v = value if value not in (None, '', 0) else t('about.na')
+        return f'{label}: {v}'
+
     def _fill(self, info: dict) -> None:
+        na = t('about.na')
         battery = info.get('battery')
-        battery_text = '—'
-        if battery:
-            battery_text = f"{battery.get('percent')}% ({battery.get('status')})"
+        battery_text = (f"{battery.get('percent')}% ({battery.get('status')})"
+                        if battery else na)
         packages = info.get('packages')
-        text = '\n'.join([
-            f'{t("about.os")}: {info["os"]}',
-            f'{t("about.kernel")}: {info["kernel"]}',
-            f'{t("about.distro")}: {info["distro"]}',
-            f'{t("about.environment")}: {info["environment"]}',
-            f'{t("about.cpu")}: {info["cpu"]}',
-            f'{t("about.ram")}: {info["ram"] or t("about.na")}',
-            f'{t("about.disk")}: {info["disk"] or t("about.na")}',
-            f'{t("about.battery")}: {battery_text}',
-            f'{t("about.packages")}: {packages if packages is not None else t("about.na")}',
-        ])
-        self.query_one('#about-text', Static).update(text)
+        pkg_text = packages if packages is not None else na
+
+        sep = '═' * 24
+        lines = [
+            f'{sep} {t("about.section.software")} {sep}',
+            self._line(t('about.os'), info.get('os')),
+            self._line(t('about.kernel'), info.get('kernel')),
+            self._line(t('about.distro'), info.get('distro')),
+            self._line(t('about.environment'), info.get('environment')),
+            self._line(t('about.platform'), info.get('platform')),
+            self._line(t('about.arch'), info.get('arch')),
+            self._line(t('about.hostname'), info.get('hostname')),
+            self._line(t('about.user'), info.get('user')),
+            self._line(t('about.python'), info.get('python')),
+            self._line(t('about.uptime'), info.get('uptime')),
+            self._line(t('about.shell'), info.get('shell')),
+            self._line(t('about.term'), info.get('term')),
+            self._line(t('about.packages'), pkg_text),
+            '',
+            f'{sep} {t("about.section.hardware")} {sep}',
+            self._line(t('about.cpu_model'), info.get('cpu_model')),
+            self._line(t('about.cpu_logical'), info.get('cpu_logical')),
+            self._line(t('about.cpu_physical'), info.get('cpu_physical')),
+            self._line(t('about.ram'), info.get('ram')),
+            self._line(t('about.ram_detail'), info.get('ram_detail')),
+            self._line(t('about.ram_available'), info.get('ram_available')),
+            self._line(t('about.swap'), info.get('swap')),
+            self._line(t('about.disk'), info.get('disk')),
+            self._line(t('about.disk_total'), info.get('disk_total')),
+            self._line(t('about.disk_used'), info.get('disk_used')),
+            self._line(t('about.disk_free'), info.get('disk_free')),
+            self._line(t('about.battery'), battery_text),
+        ]
+
+        self.query_one('#about-text', Static).update('\n'.join(lines))
+        self.query_one('#about-loading', LoadingIndicator).display = False
 
     def action_back(self) -> None:
         self.app.pop_screen()
-
 
 # ----------------------------------------------------------------- Logs ----
 
@@ -1243,6 +1299,7 @@ class AppsScreen(Screen):
             [(name, key) for key, name in self.adapter.categories().items()],
             value='all', id='apps-category', prompt=t('apps.category'),
         )
+        yield LoadingIndicator(id='apps-loading')
         yield DataTable(id='apps-table')
         yield Static(t('apps.category'), id='apps-status', classes='status', markup=False)
         yield Footer()
@@ -1253,6 +1310,7 @@ class AppsScreen(Screen):
         table.add_columns(t('common.name'), t('apps.category'),
                           t('apps.sources'), t('common.description'))
         table.focus()
+        self.query_one('#apps-loading', LoadingIndicator).display = True
         self._reload()
 
     def _reload(self) -> None:
@@ -1265,6 +1323,10 @@ class AppsScreen(Screen):
         self.query_one('#apps-status', Static).update(
             f'{len(self._apps)} apps — {t("apps.category")}: {self._category}'
         )
+        try:
+            self.query_one('#apps-loading', LoadingIndicator).display = False
+        except Exception:
+            pass
 
     @on(Input.Submitted, '#apps-search')
     def search_submitted(self, event: Input.Submitted) -> None:
@@ -1339,6 +1401,9 @@ class AppsScreen(Screen):
 
     @work(thread=True, exclusive=False)
     def _do_install(self, app, source) -> None:
+        self.app.call_from_thread(
+            lambda: setattr(self.query_one('#apps-loading', LoadingIndicator),
+                            'display', True))
         try:
             ok = self.adapter.install(app, source)
             msg = t('apps.install_ok', name=app.name,

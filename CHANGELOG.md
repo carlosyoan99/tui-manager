@@ -20,6 +20,18 @@ de formato configurada y preguntar cuando haya varias variantes.
 - `SourcesScreen` en la TUI: instalar desde catálogo con elección de fuente.
 - Preferencia `preferred_install_method` en `config/default.yaml`.
 
+### Cambiado
+- **Menú principal**: cada entrada muestra su atajo al inicio (`[1] …` a `[9] …`,
+  y `[0]` para el catálogo de apps, 10ª entrada). Atajos 1–9/0, ↑/↓, Enter.
+- **Acerca de**: info ampliada de software (SO, kernel, distro, entorno, plataforma,
+  arquitectura, equipo, usuario, Python, uptime, shell, terminal, paquetes) y
+  hardware (modelo de CPU, núcleos lógicos/físicos, RAM total/usada/disponible,
+  swap, disco total/usado/libre, batería), en dos secciones.
+- **Indicador de carga**: `LoadingIndicator` de textual en Acerca de, Aplicaciones
+  y Catálogo para tareas que demoran; se oculta al terminar.
+- **Ajustes**: cada opción tiene etiqueta y explicación (tema, idioma e intervalo
+  de refresco de procesos), aclarando para qué sirve la última opción.
+
 ### Corregido
 - `distribution.py`: orden de detección (os-release primero) para devolver el ID
   real (ubuntu/mint) en vez de `debian`; ramas de arch/fedora fuera de debian_version.
