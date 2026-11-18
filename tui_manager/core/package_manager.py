@@ -13,6 +13,7 @@ from .void_adapter import VoidAdapter
 from .termux_adapter import TermuxAdapter
 from .freebsd_adapter import FreeBSDAdapter
 from .pkgsrc_adapter import PkgsrcAdapter
+from .perf import PackageCache, paginate
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class PackageManager:
         self.distribution = distribution or self._detect_distribution()
         self.adapter = self._get_adapter()
         self.audit_log = audit_log
+        self._package_cache = PackageCache()
         logger.info(f"PackageManager inicializado para distribución: {self.distribution}")
 
     def _audit(self, action: str, target: str, result: bool) -> None:
@@ -81,7 +83,10 @@ class PackageManager:
         logger.warning(f"Distribución no soportada, usando DebianAdapter")
         return DebianAdapter()
 
-    def get_installed_packages(self, filters: dict = None) -> List[Package]:
+    def get_installed_packages(self, filters: dict = None,
+                               use_cache: bool = False,
+                               offset: int = 0,
+                               limit: Optional[int] = None) -> List[Package]:
         """
         Obtiene la lista de paquetes instalados
 
@@ -90,11 +95,20 @@ class PackageManager:
                      - category: Filtrar por categoría
                      - name: Filtrar por nombre
                      - installed: Solo paquetes instalados
+            use_cache: Si es True, reutiliza el listado del adapter cacheado.
+                       Por defecto False para no cambiar el comportamiento
+                       existente (ni romper tests).
+            offset: Fila inicial de la ventana paginada (0 por defecto).
+            limit: Número máximo de filas de la ventana (None = todas).
 
         Returns:
             Lista de objetos Package
         """
-        packages = self.adapter.get_installed_packages()
+        if use_cache:
+            packages = self._package_cache.get(
+                'installed', self.adapter.get_installed_packages)
+        else:
+            packages = self.adapter.get_installed_packages()
 
         if filters:
             if 'category' in filters and filters['category']:
@@ -106,8 +120,16 @@ class PackageManager:
             if 'installed' in filters and filters['installed'] is not None:
                 packages = [p for p in packages if p.installed == filters['installed']]
 
+        # `paginate` devuelve una copia, de modo que el listado cacheado
+        # nunca se expone a mutaciones del llamador.
+        packages = paginate(packages, offset, limit)
+
         logger.debug(f"Retornando {len(packages)} paquetes")
         return packages
+
+    def invalidate_cache(self) -> None:
+        """Invalida la caché de listados de paquetes."""
+        self._package_cache.invalidate()
 
     def search_package(self, query: str) -> List[Package]:
         """
@@ -163,6 +185,7 @@ class PackageManager:
             return False
         finally:
             self._audit('install_package', package_name, success)
+            self.invalidate_cache()
 
     def remove_package(self, package_name: str, confirm: bool = True) -> bool:
         """
@@ -189,6 +212,7 @@ class PackageManager:
             return False
         finally:
             self._audit('remove_package', package_name, success)
+            self.invalidate_cache()
 
     def update_package_cache(self) -> bool:
         """
@@ -198,7 +222,9 @@ class PackageManager:
             True si la actualización fue exitosa, False en caso contrario
         """
         try:
-            return self.adapter.update_cache()
+            result = self.adapter.update_cache()
+            self.invalidate_cache()
+            return result
         except Exception as e:
             logger.error(f"Error al actualizar caché: {e}")
             print(f"\n❌ Error al actualizar caché: {e}")

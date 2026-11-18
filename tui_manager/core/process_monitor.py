@@ -8,6 +8,7 @@ from typing import List, Optional
 from dataclasses import dataclass
 
 from .audit import AuditLog
+from .perf import paginate
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,8 @@ class ProcessMonitor:
         if self.audit_log is not None:
             self.audit_log.record(action, target, result)
 
-    def get_processes(self, filters: dict = None) -> List[Process]:
+    def get_processes(self, filters: dict = None, offset: int = 0,
+                      limit: Optional[int] = None) -> List[Process]:
         """
         Obtiene la lista de procesos
 
@@ -109,6 +111,8 @@ class ProcessMonitor:
                      - min_mem: Memoria mínima (MB)
                      - max_mem: Memoria máxima (MB)
                      - pid: Filtrar por PID
+            offset: Fila inicial de la ventana paginada (0 por defecto).
+            limit: Número máximo de filas de la ventana (None = todas).
 
         Returns:
             Lista de objetos Process
@@ -152,7 +156,7 @@ class ProcessMonitor:
         if filters:
             processes = self._apply_filters(processes, filters)
 
-        return processes
+        return paginate(processes, offset, limit)
 
     def get_process_by_pid(self, pid: int) -> Process:
         """
