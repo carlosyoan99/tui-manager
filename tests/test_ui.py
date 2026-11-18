@@ -755,3 +755,79 @@ async def test_settings_shows_help_labels(tmp_path, monkeypatch):
                  if 'hint' in w.classes]
         assert len(hints) >= 3
         assert any('procesos' in h.lower() for h in hints)
+
+
+# -------------------------------------- B2-2: ayuda contextual con «?» ------
+
+def _menu_screen_classes():
+    from tui_manager.ui import screens
+    return [getattr(screens, cls_name)
+            for _, cls_name in screens.MainMenuScreen.ENTRIES]
+
+
+def _binding_map(screen_cls):
+    return {
+        (b.key if hasattr(b, 'key') else b[0]):
+        (b.action if hasattr(b, 'action') else b[1])
+        for b in screen_cls.BINDINGS
+    }
+
+
+@pytest.mark.parametrize('screen_cls', _menu_screen_classes(),
+                         ids=lambda cls: cls.__name__)
+def test_menu_screens_bind_question_mark_to_help(screen_cls):
+    """Las 10 pantallas del menú enlazan «?» con la ayuda contextual."""
+    assert _binding_map(screen_cls).get('?') == 'help'
+    assert callable(screen_cls.action_help)
+
+
+def test_help_context_covers_all_menu_screens():
+    """Ninguna pantalla se queda sin contexto; todas las claves son i18n."""
+    from tui_manager.i18n import STRINGS
+    from tui_manager.ui.screens import HelpScreen, MainMenuScreen
+
+    contexts = {'MainMenuScreen'} | {
+        cls.__name__ for cls in _menu_screen_classes()}
+    assert contexts <= set(HelpScreen.CONTEXT_KEYS)
+    for lang, strings in STRINGS.items():
+        for context in contexts:
+            for key in HelpScreen.CONTEXT_KEYS[context]:
+                assert key in strings, f'{context}: "{key}" falta en {lang}'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('screen_cls', _menu_screen_classes(),
+                         ids=lambda cls: cls.__name__)
+async def test_question_mark_opens_contextual_help(tmp_path, monkeypatch,
+                                                   screen_cls):
+    """«?» abre HelpScreen con el contexto de la pantalla activa."""
+    from tui_manager.i18n import t
+    from tui_manager.ui.screens import HelpScreen
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        app.push_screen(screen_cls(services))
+        await pilot.pause()
+        await pilot.press('?')
+        await pilot.pause()
+        assert isinstance(app.screen, HelpScreen)
+        assert app.screen.context == screen_cls.__name__
+        text = str(app.screen.query_one('#help-text').render())
+        assert t('help.context') in text
+        assert 'tui-manager --doctor' in text
+
+
+@pytest.mark.asyncio
+async def test_main_menu_question_mark_opens_help(tmp_path, monkeypatch):
+    """«?» en el menú principal abre ayuda con contexto de menú."""
+    from tui_manager.ui.screens import HelpScreen
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press('?')
+        await pilot.pause()
+        assert isinstance(app.screen, HelpScreen)
+        assert app.screen.context == 'MainMenuScreen'

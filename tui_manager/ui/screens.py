@@ -7,7 +7,8 @@ Pantallas de TUI Manager (Alfa 3).
 - ThemesScreen: packs de tema, wallpaper, claro/oscuro, instalar desde URL.
 - UpdatesScreen: actualizaciones, upgrade, caché, huérfanos, firmware.
 - SettingsScreen: tema interno, idioma, intervalo de refresco.
-- HelpScreen: atajos contextuales y sugerencia de --doctor.
+- HelpScreen: atajos contextuales y sugerencia de --doctor; `?` abre la
+  ayuda correspondiente a la pantalla activa (B2-2).
 - ConfirmScreen/InputScreen: modales reutilizables.
 - ScreenManager: fachada de compatibilidad para main.py y tests.
 """
@@ -57,6 +58,16 @@ def _status(message: str, keys: str = '', empty: bool = False) -> str:
     return f'{message} — {keys}' if keys else message
 
 
+def _open_context_help(screen: Screen) -> None:
+    """Abre ``HelpScreen`` con el contexto de la pantalla que pulsó «?».
+
+    Compartido por las 10 pantallas del menú (y por el propio HelpScreen)
+    para que la ayuda mostrada siempre corresponda a la pantalla activa.
+    """
+    screen.app.push_screen(
+        HelpScreen(screen.services, context=type(screen).__name__))
+
+
 # ---------------------------------------------------------------- Menú ----
 
 class MainMenuScreen(Screen):
@@ -77,6 +88,7 @@ class MainMenuScreen(Screen):
 
     BINDINGS = [
         Binding('escape', 'app.quit', t('common.quit')),
+        ('?', 'help', t('common.help')),
     ] + [
         Binding('0' if index == 9 else str(index + 1),
                 f'quick("{entry_id}")', show=False)
@@ -121,6 +133,10 @@ class MainMenuScreen(Screen):
         """Atajo numérico 1–9 → abre la entrada correspondiente."""
         self._open(entry_id)
 
+    def action_help(self) -> None:
+        """?: ayuda contextual del menú principal."""
+        _open_context_help(self)
+
     def _open(self, entry_id: str) -> None:
         from tui_manager.ui import screens
         screen_cls = getattr(screens, {
@@ -148,6 +164,7 @@ class PackagesScreen(Screen):
         ('c', 'cache', t('packages.update_cache')),
         ('f', 'filter', t('common.search')),
         Binding('/', 'filter', show=False),
+        ('?', 'help', t('common.help')),
         ('escape', 'back', t('common.back')),
     ]
 
@@ -307,6 +324,10 @@ class PackagesScreen(Screen):
             self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
                                       severity='error')
 
+    def action_help(self) -> None:
+        """?: ayuda contextual de aplicaciones."""
+        _open_context_help(self)
+
     def action_back(self) -> None:
         """Esc: si el buscador tiene el foco, vuelve a la tabla; si no, atrás."""
         if isinstance(self.focused, Input):
@@ -328,6 +349,7 @@ class ProcessesScreen(Screen):
         ('s', 'sort', t('processes.sort')),
         ('f', 'filter', t('common.filter')),
         Binding('/', 'filter', show=False),
+        ('?', 'help', t('common.help')),
         ('escape', 'back', t('common.back')),
     ]
 
@@ -464,6 +486,10 @@ class ProcessesScreen(Screen):
             self.notify(f'{t("common.error")}: {exc}', severity='error')
         self.refresh_table()
 
+    def action_help(self) -> None:
+        """?: ayuda contextual de procesos."""
+        _open_context_help(self)
+
     def action_back(self) -> None:
         if isinstance(self.focused, Input):
             self.query_one('#process-table', DataTable).focus()
@@ -476,7 +502,10 @@ class ProcessesScreen(Screen):
 class SettingsScreen(Screen):
     """Ajustes: tema interno, idioma, intervalo de refresco."""
 
-    BINDINGS = [('escape', 'back', t('common.back'))]
+    BINDINGS = [
+        ('?', 'help', t('common.help')),
+        ('escape', 'back', t('common.back')),
+    ]
 
     def __init__(self, services: Services):
         super().__init__()
@@ -538,6 +567,10 @@ class SettingsScreen(Screen):
         except (TypeError, ValueError):
             self.notify(f'{t("common.error")}: {event.value}', severity='error')
 
+    def action_help(self) -> None:
+        """?: ayuda contextual de ajustes."""
+        _open_context_help(self)
+
     def action_back(self) -> None:
         self.app.pop_screen()
 
@@ -547,9 +580,14 @@ class SettingsScreen(Screen):
 class HelpScreen(Screen):
     """Atajos de teclado (contextuales) y diagnóstico."""
 
-    BINDINGS = [('escape', 'back', t('common.back'))]
+    BINDINGS = [
+        ('?', 'help', t('common.help')),
+        ('escape', 'back', t('common.back')),
+    ]
 
-    # pantalla → claves i18n con sus atajos propios
+    # pantalla → claves i18n con sus atajos propios. B2-2: las 10 pantallas
+    # del menú tienen contexto; cuando no existe clave propia se reutiliza
+    # `common.help` (i18n.py no se amplía en este paso).
     CONTEXT_KEYS = {
         'MainMenuScreen': ('menu.keys',),
         'PackagesScreen': ('packages.keys',),
@@ -557,6 +595,11 @@ class HelpScreen(Screen):
         'ThemesScreen': ('themes.keys',),
         'UpdatesScreen': ('updates.keys',),
         'SystemScreen': ('system.keys',),
+        'SettingsScreen': ('common.help',),
+        'AboutScreen': ('common.help',),
+        'LogsScreen': ('common.help',),
+        'AppsScreen': ('common.help',),
+        'HelpScreen': ('common.help',),
     }
 
     def __init__(self, services: Services, context: str = ''):
@@ -578,6 +621,10 @@ class HelpScreen(Screen):
             yield Static('\n'.join(lines), id='help-text', markup=False)
         yield Footer()
 
+    def action_help(self) -> None:
+        """?: ayuda contextual de la propia pantalla de ayuda."""
+        _open_context_help(self)
+
     def action_back(self) -> None:
         self.app.pop_screen()
 
@@ -595,6 +642,7 @@ class ThemesScreen(Screen):
         ('l', 'light', t('system.light_mode')),
         ('i', 'install', t('themes.install_url')),
         ('r', 'reload', t('common.refresh')),
+        ('?', 'help', t('common.help')),
         ('escape', 'back', t('common.back')),
     ]
 
@@ -785,6 +833,10 @@ class ThemesScreen(Screen):
             self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
                                       severity='error')
 
+    def action_help(self) -> None:
+        """?: ayuda contextual de temas."""
+        _open_context_help(self)
+
     def action_back(self) -> None:
         self.app.pop_screen()
 
@@ -800,6 +852,7 @@ class UpdatesScreen(Screen):
         ('o', 'orphans', t('packages.orphans')),
         ('F', 'firmware', t('updates.firmware')),
         ('r', 'refresh', t('common.refresh')),
+        ('?', 'help', t('common.help')),
         ('escape', 'back', t('common.back')),
     ]
 
@@ -947,6 +1000,10 @@ class UpdatesScreen(Screen):
             self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
                                       severity='error')
 
+    def action_help(self) -> None:
+        """?: ayuda contextual de actualizaciones."""
+        _open_context_help(self)
+
     def action_back(self) -> None:
         self.app.pop_screen()
 
@@ -960,7 +1017,10 @@ class SystemScreen(Screen):
     falta) según `SystemControl.availability()` + capacidades del entorno.
     """
 
-    BINDINGS = [('escape', 'back', t('common.back'))]
+    BINDINGS = [
+        ('?', 'help', t('common.help')),
+        ('escape', 'back', t('common.back')),
+    ]
 
     # id → clave de disponibilidad (None: acción siempre disponible)
     ORDER = (
@@ -1082,6 +1142,10 @@ class SystemScreen(Screen):
             self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
                                       severity='error')
 
+    def action_help(self) -> None:
+        """?: ayuda contextual de sistema."""
+        _open_context_help(self)
+
     def action_back(self) -> None:
         self.app.pop_screen()
 
@@ -1091,7 +1155,10 @@ class SystemScreen(Screen):
 class AboutScreen(Screen):
     """B · Info detallada del sistema: software y hardware."""
 
-    BINDINGS = [('escape', 'back', t('common.back'))]
+    BINDINGS = [
+        ('?', 'help', t('common.help')),
+        ('escape', 'back', t('common.back')),
+    ]
 
     def __init__(self, services: Services):
         super().__init__()
@@ -1169,6 +1236,10 @@ class AboutScreen(Screen):
         self.query_one('#about-text', Static).update('\n'.join(lines))
         self.query_one('#about-loading', LoadingIndicator).display = False
 
+    def action_help(self) -> None:
+        """?: ayuda contextual de Acerca de."""
+        _open_context_help(self)
+
     def action_back(self) -> None:
         self.app.pop_screen()
 
@@ -1178,6 +1249,7 @@ class LogsScreen(Screen):
     """E · Visor de logs: cola del log de la app con refresco manual."""
 
     BINDINGS = [('r', 'refresh', t('common.refresh')),
+                ('?', 'help', t('common.help')),
                 ('escape', 'back', t('common.back'))]
 
     def __init__(self, services: Services):
@@ -1216,6 +1288,10 @@ class LogsScreen(Screen):
         message = '' if empty else f'{t("logs.title")}: {len(text.splitlines())}'
         self.query_one('#logs-status', Static).update(
             _status(message, empty=empty))
+
+    def action_help(self) -> None:
+        """?: ayuda contextual de logs."""
+        _open_context_help(self)
 
     def action_back(self) -> None:
         self.app.pop_screen()
@@ -1321,6 +1397,7 @@ class AppsScreen(Screen):
         ('c', 'category', t('apps.category')),
         ('f', 'filter', t('common.search')),
         Binding('/', 'filter', show=False),
+        ('?', 'help', t('common.help')),
         ('escape', 'back', t('common.back')),
     ]
 
@@ -1388,6 +1465,10 @@ class AppsScreen(Screen):
 
     def action_category(self) -> None:
         self.query_one('#apps-category', Select).focus()
+
+    def action_help(self) -> None:
+        """?: ayuda contextual del catálogo de apps."""
+        _open_context_help(self)
 
     def action_back(self) -> None:
         self.app.pop_screen()

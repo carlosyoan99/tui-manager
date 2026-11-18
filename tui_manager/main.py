@@ -6,7 +6,8 @@ Uso:
     tui-manager            lanza la interfaz TUI
     tui-manager --version  imprime la versión
     tui-manager --doctor   diagnóstico del entorno (SO, distro, gestor,
-                           entorno de escritorio, capacidades, elevación)
+                           entorno de escritorio, capacidades, versiones de
+                           CLIs, elevación)
     tui-manager --lang es  fuerza el idioma (es|en) para esta ejecución
 
 Inspired: Omarchy Quattro. Portable: Linux, BSD y Termux (limitado).
@@ -18,6 +19,7 @@ import argparse
 import logging
 import platform
 import shutil
+import subprocess
 import sys
 
 from tui_manager import __version__
@@ -26,6 +28,40 @@ from tui_manager.core.distribution import DistributionDetector, DistributionErro
 from tui_manager.core.environment import EnvironmentDetector
 from tui_manager.i18n import DEFAULT_LANGUAGE, available_languages, set_language, t
 from tui_manager.utils.logger import setup_logger
+
+
+# Gestores consultados por --doctor: SOLO se invoca `<cli> --version`.
+CLI_VERSION_COMMANDS = ('apt', 'pacman', 'dnf', 'pkg', 'xbps-query')
+
+
+def _cli_version(command: str) -> str:
+    """Devuelve la versión de una CLI, o «N/D» si no está disponible.
+
+    Seguridad (B2-2): el único subproceso permitido es `<command> --version`,
+    con salida capturada y timeout. Nunca se ejecuta una acción que pueda
+    modificar el sistema, y cualquier error se degrada a «N/D».
+    """
+    try:
+        result = subprocess.run(
+            [command, '--version'],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return 'N/D'
+
+    if result.returncode != 0:
+        return 'N/D'
+    output = (result.stdout or result.stderr).strip()
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    # Pacman y otras CLIs anteponen arte ASCII: elegir la línea con dígitos.
+    for line in lines:
+        if any(char.isdigit() for char in line):
+            return line
+    return lines[0] if lines else 'N/D'
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -75,6 +111,12 @@ def run_doctor() -> str:
         add(t('doctor.caps'), caps)
     except Exception as exc:
         add(t('doctor.env'), str(exc), warn=True)
+
+    # Versiones de CLIs (B2-2): únicamente `<cli> --version`, sin efectos
+    # en el sistema. Las ausentes se degradan a «N/D» con estado de aviso.
+    for cli in CLI_VERSION_COMMANDS:
+        version = _cli_version(cli)
+        add(cli, version, warn=version == 'N/D')
 
     add(t('doctor.sudo'), shutil.which('sudo') or 'no (root directo/termux)',
         warn=shutil.which('sudo') is None and platform.system() == 'Linux'
