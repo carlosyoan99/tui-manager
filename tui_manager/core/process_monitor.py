@@ -114,6 +114,8 @@ class ProcessMonitor:
             if not line.strip():
                 continue
 
+            # Columnas reales de `ps aux`:
+            # USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND
             parts = line.split(None, 10)
             if len(parts) >= 11:
                 try:
@@ -124,14 +126,15 @@ class ProcessMonitor:
                         mem=float(parts[3]),
                         vsz=int(parts[4]),
                         rss=int(parts[5]),
-                        nice=int(parts[6]),
-                        start=parts[7],
-                        time=parts[8],
-                        command=' '.join(parts[9:])
+                        # `ps aux` no reporta NI: nice=0 (TTY en parts[6], STAT en parts[7])
+                        nice=0,
+                        start=parts[8],
+                        time=parts[9],
+                        command=parts[10] if len(parts) > 10 else ''
                     )
                     processes.append(process)
                 except (ValueError, IndexError) as e:
-                    logger.debug(f"Error al parsear línea: {line}")
+                    logger.debug(f"Error al parsear línea: {line} ({e})")
                     continue
 
         # Aplicar filtros

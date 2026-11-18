@@ -20,7 +20,7 @@ class DistributionDetector:
 
     SUPPORTED_DISTRIBUTIONS = [
         'debian', 'ubuntu', 'linuxmint', 'kali', 'mx',
-        'arch', 'manjaro', 'endeavouros', 'garuda', 'artix',
+        'arch', 'manjaro', 'endeavouros', 'garuda', 'artix', 'cachyos',
         'fedora', 'rhel', 'centos', 'rocky', 'almalinux',
         'void', 'gentoo',
         'opensuse', 'suse',

@@ -1,0 +1,22 @@
+name: gruvbox-dark
+dark: true
+palette:
+  bg: "#282828"
+  fg: "#ebdbb2"
+  accent: "#fabd2f"
+  bg_alt: "#1d2021"
+  fg_alt: "#bdae93"
+  red: "#fb4934"
+  green: "#b8bb26"
+  yellow: "#fabd2f"
+  blue: "#83a598"
+  magenta: "#d3869b"
+  cyan: "#8ec07c"
+  black: "#1d2021"
+  white: "#ebdbb2"
+surfaces:
+  alacritty:
+    palette:
+      bg: "#282828"
+      fg: "#ebdbb2"
+      accent: "#fabd2f"

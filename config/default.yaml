@@ -1,0 +1,14 @@
+# Configuración por defecto de TUI Manager
+# Copia a ~/.tui-manager/config.yaml y edita lo que quieras.
+
+theme: dark                # tema interno de la TUI: dark | light | retro
+language: es               # i18n: es | en
+auto_update: true
+refresh_interval: 2        # segundos entre refrescos de procesos
+show_details: true
+sort_by: name
+sort_order: asc
+default_category: all
+show_notifications: true
+log_level: info
+default_package_manager: null  # forzar gestor (debian|arch|fedora|void|termux|freebsd|...)

@@ -122,27 +122,20 @@ class FreeBSDAdapter(PackageAdapter):
         return True
 
     def get_updates_available(self) -> List[Package]:
+        """Actualizables: pkg upgrade -n → líneas "	name: oldver -> newver"."""
         returncode, stdout, stderr = self.execute_command(
             ['pkg', 'upgrade', '-n'], sudo=self._needs_sudo()
         )
         if returncode != 0:
             logger.error(f"Error al obtener actualizaciones: {stderr}")
             return []
-        # Las líneas de la lista: "    name-1.2.3 pkgname" o "name-1.2.3"
         packages = []
-        in_list = False
+        pattern = re.compile(r'^\s+(\S+?):\s+(\S+)\s*->\s*(\S+)')
         for line in stdout.split('\n'):
-            stripped = line.strip()
-            if stripped.startswith('Upgraded'):
-                in_list = True
-                continue
-            if in_list and not stripped:
-                break
-            if in_list and stripped:
-                for token in stripped.split():
-                    if re.match(r'^\S+?-\d\S*$', token):
-                        name, _, version = token.rpartition('-')
-                        packages.append(Package(name=name, version=version, installed=True))
+            match = pattern.match(line)
+            if match:
+                packages.append(Package(
+                    name=match.group(1), version=match.group(3), installed=True))
         return packages
 
     def remove_orphans(self) -> bool:

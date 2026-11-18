@@ -1,32 +1,47 @@
 """
-Adapter para Fedora usando dnf
+Adapter para Fedora usando dnf. Formatos reales verificados:
+- dnf list installed:  "curl.x86_64      8.5.0-2.el9      @fedora"
+- dnf search:          "===== Name Matched ====" + "Name : x" / "Summary : y"
+- dnf check-update:    lista rpm; rc=100 cuando HAY actualizaciones (no es error)
+- dnf repoquery --requires: dependencias
 """
 
+import re
 import logging
 from typing import List
 from .package_adapter import PackageAdapter, Package, PackageNotFoundError
+from .categories import CATEGORIES as _BASE_CATEGORIES, get_category as _shared_category
 
 logger = logging.getLogger(__name__)
+
+RE_INFO_FIELD = re.compile(r'^(Name|Version|Summary)\s*:\s*(.*)$')
 
 
 class FedoraAdapter(PackageAdapter):
     """Gestor para Fedora usando dnf"""
 
-    CATEGORIES = {
-        'development': ['gcc', 'gcc-c++', 'make', 'cmake', 'git', 'python3-devel'],
-        'system': ['systemd', 'grub2', 'kernel', 'cronie'],
-        'multimedia': ['vlc', 'mpv', 'ffmpeg', 'gstreamer1-plugins-good'],
-        'network': ['NetworkManager', 'openssh', 'curl', 'wget', 'git'],
-        'games': ['steam', 'lutris', 'wine', 'gamescope'],
-        'office': ['libreoffice', 'thunderbird', 'evince', 'gimp'],
-        'utilities': ['vim', 'neovim', 'htop', 'tmux', 'bat', 'ripgrep'],
-        'security': ['ufw', 'fail2ban', 'openssh-server', 'firewalld'],
-        'database': ['postgresql', 'mysql', 'mariadb', 'sqlite'],
-        'other': []
-    }
+    # dnf list/search/info/check-update/repoquery son de lectura.
+    _READONLY = {('dnf', 'list'), ('dnf', 'search'), ('dnf', 'info'),
+                 ('dnf', 'check-update'), ('dnf', 'repoquery')}
+
+    CATEGORIES = _BASE_CATEGORIES
+
+    def execute_command(self, command: List[str], sudo: bool = True) -> tuple:
+        if sudo and len(command) > 1 and (command[0], command[1]) in self._READONLY:
+            sudo = False
+        return super().execute_command(command, sudo=sudo)
+
+    @staticmethod
+    def _split_rpm_name(col: str):
+        """'curl.x86_64' → ('curl', 'x86_64'); nombres con punto sin arch no existen en rpm."""
+        if '.' in col and col.rsplit('.', 1)[1] in (
+                'i686', 'x86_64', 'aarch64', 'noarch', 'armv7hl', 'ppc64le', 's390x'):
+            name, arch = col.rsplit('.', 1)
+            return name, arch
+        return col, ''
 
     def get_installed_packages(self) -> List[Package]:
-        """Obtiene la lista de paquetes instalados"""
+        """Obtiene la lista de paquetes instalados (un subproceso, sin desc. por paquete)."""
         returncode, stdout, stderr = self.execute_command(['dnf', 'list', 'installed'])
 
         if returncode != 0:
@@ -34,32 +49,22 @@ class FedoraAdapter(PackageAdapter):
             return []
 
         packages = []
-        lines = stdout.split('\n')[1:]  # Skip header
-
-        for line in lines:
-            if not line.strip():
+        for line in stdout.split('\n'):
+            line = line.strip()
+            if not line or line.startswith('Paquetes instalados') or line.startswith('Installed Packages') \
+                    or line.startswith('Last metadata') or line.startswith('Package') and 'Arch' in line:
                 continue
-
-            # Formato: package.version.arch
-            parts = line.split('.')
-            if len(parts) >= 2:
-                package_name = parts[0]
-                version = parts[1].split('[')[0]
-
-                # Obtener descripción
-                description = self._get_description(package_name)
-
-                # Obtener categoría
-                category = self._get_category(package_name)
-
-                package = Package(
-                    name=package_name,
-                    version=version,
-                    description=description,
-                    installed=True
-                )
-                packages.append(package)
-
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            name, _arch = self._split_rpm_name(parts[0])
+            version = parts[1]
+            packages.append(Package(
+                name=name,
+                version=version,
+                description=self._get_category(name),
+                installed=True,
+            ))
         logger.debug(f"Obtenidos {len(packages)} paquetes instalados")
         return packages
 
@@ -70,28 +75,18 @@ class FedoraAdapter(PackageAdapter):
         if returncode != 0:
             raise PackageNotFoundError(f"Paquete '{package_name}' no encontrado")
 
-        description = ""
-        version = ""
-        dependencies = []
-
+        info = Package(name=package_name, installed=True)
         for line in stdout.split('\n'):
-            line = line.strip()
-            if line.startswith('Description'):
-                description = line.split(':', 1)[1].strip()
-            elif line.startswith('Version'):
-                version = line.split(':', 1)[1].strip()
-            elif line.startswith('Dependencies'):
-                deps = line.split(':', 1)[1].strip()
-                if deps:
-                    dependencies = [d.strip() for d in deps.split(',')]
-
-        return Package(
-            name=package_name,
-            version=version,
-            description=description,
-            installed=True,
-            dependencies=dependencies
-        )
+            match = RE_INFO_FIELD.match(line.strip())
+            if not match:
+                continue
+            key, value = match.group(1), match.group(2).strip()
+            if key == 'Version':
+                info.version = value
+            elif key == 'Summary':
+                info.description = value
+        info.dependencies = self.get_dependencies(package_name)
+        return info
 
     def install_package(self, package_name: str, confirm: bool = True) -> bool:
         """Instala un paquete"""
@@ -102,7 +97,8 @@ class FedoraAdapter(PackageAdapter):
                 print("Instalación cancelada")
                 return False
 
-        returncode, stdout, stderr = self.execute_command(['dnf', 'install', '-y', package_name])
+        returncode, stdout, stderr = self.execute_command(
+            ['dnf', 'install', '-y', package_name])
 
         if returncode != 0:
             logger.error(f"Error al instalar {package_name}: {stderr}")
@@ -120,7 +116,8 @@ class FedoraAdapter(PackageAdapter):
                 print("Desinstalación cancelada")
                 return False
 
-        returncode, stdout, stderr = self.execute_command(['dnf', 'remove', '-y', package_name])
+        returncode, stdout, stderr = self.execute_command(
+            ['dnf', 'remove', '-y', package_name])
 
         if returncode != 0:
             logger.error(f"Error al desinstalar {package_name}: {stderr}")
@@ -138,25 +135,18 @@ class FedoraAdapter(PackageAdapter):
             return []
 
         packages = []
-        current_package = None
-
         for line in stdout.split('\n'):
-            line = line.strip()
-            if not line:
+            match = RE_INFO_FIELD.match(line.strip())
+            if not match:
                 continue
-
-            if line.startswith('Name :'):
-                if current_package:
-                    packages.append(current_package)
-                current_package = Package(name=line[7:].strip())
-            elif current_package and line.startswith('Summary :'):
-                current_package.description = line[10:].strip()
-            elif current_package and line.startswith('Version :'):
-                current_package.version = line[10:].strip()
-
-        if current_package:
-            packages.append(current_package)
-
+            key, value = match.group(1), match.group(2).strip()
+            if key == 'Name':
+                packages.append(Package(name=value, installed=False))
+            elif packages:
+                if key == 'Summary':
+                    packages[-1].description = value
+                elif key == 'Version' and not packages[-1].version:
+                    packages[-1].version = value
         return packages
 
     def update_cache(self) -> bool:
@@ -172,54 +162,39 @@ class FedoraAdapter(PackageAdapter):
         return True
 
     def get_updates_available(self) -> List[Package]:
-        """Obtiene la lista de paquetes que pueden ser actualizados"""
+        """Obtiene la lista de paquetes actualizables.
+
+        dnf check-update retorna 100 cuando hay actualizaciones: no es error.
+        """
         returncode, stdout, stderr = self.execute_command(['dnf', 'check-update'])
 
-        if returncode != 0:
-            # check-update puede retornar 100 si hay actualizaciones
-            if returncode == 100:
-                return []
-            logger.error(f"Error al obtener actualizaciones: {stderr}")
+        if returncode not in (0, 100):
+            logger.error(f"Error al obtener actualizaciones (rc={returncode}): {stderr}")
             return []
 
         packages = []
         for line in stdout.split('\n'):
             line = line.strip()
-            if line and not line.startswith('Last metadata'):
-                # Formato: package oldversion newversion
-                parts = line.split()
-                if len(parts) >= 3:
-                    package_name = parts[0]
-                    new_version = parts[2]
-
-                    package = Package(
-                        name=package_name,
-                        version=new_version,
-                        installed=True
-                    )
-                    packages.append(package)
-
+            if not line or line.startswith('Last metadata') or line.endswith(':'):
+                continue
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            name, _arch = self._split_rpm_name(parts[0])
+            if not name:
+                continue
+            packages.append(Package(name=name, version=parts[1], installed=True))
         return packages
 
     def get_dependencies(self, package_name: str) -> List[str]:
-        """Obtiene las dependencias de un paquete"""
-        try:
-            package = self.get_package_info(package_name)
-            return package.dependencies
-        except PackageNotFoundError:
+        """Dependencias vía dnf repoquery --requires --resolve."""
+        returncode, stdout, stderr = self.execute_command(
+            ['dnf', 'repoquery', '--requires', '--resolve', '--qf', '%{name}', package_name])
+        if returncode != 0:
             return []
-
-    def _get_description(self, package_name: str) -> str:
-        """Obtiene la descripción de un paquete"""
-        try:
-            package = self.get_package_info(package_name)
-            return package.description
-        except PackageNotFoundError:
-            return ""
+        return [line.strip() for line in stdout.split('\n') if line.strip()]
 
     def _get_category(self, package_name: str) -> str:
-        """Obtiene la categoría de un paquete"""
-        for category, packages in self.CATEGORIES.items():
-            if package_name in packages:
-                return category
-        return 'other'
+        """Categoría desde el dict compartido (sin subprocesos por paquete)."""
+        category = _shared_category(package_name)
+        return f"[{category}]" if category != 'other' else ""

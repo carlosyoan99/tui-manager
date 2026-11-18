@@ -20,6 +20,7 @@ class Config:
 
     DEFAULT_CONFIG = {
         'theme': 'dark',
+        'language': 'es',
         'auto_update': True,
         'refresh_interval': 2,
         'show_details': True,

@@ -1,30 +1,33 @@
 """
-Adapter para Debian y Ubuntu usando apt
+Adapter para Debian y Ubuntu usando apt (formatos reales verificados):
+- apt list --installed:  "curl/stable,now 8.5.0-2 amd64 [installed]"
+- apt search:            "curl/stable,now ... [installed]" + desc. indentada
+- apt list --upgradable: idem installed, con [upgradable from: ...]
 """
 
 import re
 import logging
-from typing import List, Optional
+from typing import List
 from .package_adapter import PackageAdapter, Package, PackageNotFoundError
+from .categories import CATEGORIES as _BASE_CATEGORIES, get_category as _shared_category
 
 logger = logging.getLogger(__name__)
+
+RE_PKG_LINE = re.compile(r'^(\S+)/(\S+),now\s+([^\s]+)\s+([^\s]+)\s+\[(installed|upgradable)')
 
 
 class DebianAdapter(PackageAdapter):
     """Gestor para Debian y Ubuntu usando apt"""
 
-    CATEGORIES = {
-        'development': ['build-essential', 'gcc', 'g++', 'make', 'cmake', 'git', 'python3-dev'],
-        'system': ['systemd', 'grub', 'kernel', 'init', 'cron'],
-        'multimedia': ['vlc', 'mpv', 'ffmpeg', 'gstreamer'],
-        'network': ['network-manager', 'openssh', 'curl', 'wget', 'git'],
-        'games': ['steam', 'lutris', 'wine', 'gamescope'],
-        'office': ['libreoffice', 'thunderbird', 'evince', 'gimp'],
-        'utilities': ['vim', 'neovim', 'htop', 'tmux', 'bat', 'ripgrep'],
-        'security': ['ufw', 'fail2ban', 'clamav', 'openssh-server'],
-        'database': ['postgresql', 'mysql', 'sqlite3'],
-        'other': []
-    }
+    # Solo lectura no necesita sudo (apt list/search/show); escrituras sí.
+    _READONLY = {('apt', 'list'), ('apt', 'search'), ('apt', 'show')}
+
+    CATEGORIES = _BASE_CATEGORIES
+
+    def execute_command(self, command: List[str], sudo: bool = True) -> tuple:
+        if sudo and len(command) > 1 and (command[0], command[1]) in self._READONLY:
+            sudo = False
+        return super().execute_command(command, sudo=sudo)
 
     def get_installed_packages(self) -> List[Package]:
         """Obtiene la lista de paquetes instalados"""
@@ -35,32 +38,17 @@ class DebianAdapter(PackageAdapter):
             return []
 
         packages = []
-        lines = stdout.split('\n')[1:]  # Skip header
-
-        for line in lines:
-            if not line.strip():
+        for line in stdout.split('\n'):
+            match = RE_PKG_LINE.match(line.strip())
+            if not match:
                 continue
-
-            # Formato: package/version/arch
-            parts = line.split('/')
-            if len(parts) >= 2:
-                package_name = parts[0].strip()
-                version = parts[1].split('[')[0].strip()
-
-                # Obtener descripción
-                description = self._get_description(package_name)
-
-                # Obtener categoría
-                category = self._get_category(package_name)
-
-                package = Package(
-                    name=package_name,
-                    version=version,
-                    description=description,
-                    installed=True
-                )
-                packages.append(package)
-
+            name, _, version = match.group(1), match.group(2), match.group(3)
+            packages.append(Package(
+                name=name,
+                version=version,
+                description=self._get_category(name),
+                installed=True,
+            ))
         logger.debug(f"Obtenidos {len(packages)} paquetes instalados")
         return packages
 
@@ -71,31 +59,23 @@ class DebianAdapter(PackageAdapter):
         if returncode != 0:
             raise PackageNotFoundError(f"Paquete '{package_name}' no encontrado")
 
-        description = ""
-        version = ""
-        size = ""
-        dependencies = []
-
+        info = Package(name=package_name, installed=True)
+        capture_deps = False
         for line in stdout.split('\n'):
-            line = line.strip()
-            if line.startswith('Description:'):
-                description = line.split(':', 1)[1].strip()
-            elif line.startswith('Version:'):
-                version = line.split(':', 1)[1].strip()
-            elif line.startswith('Size:'):
-                size = line.split(':', 1)[1].strip()
-            elif line.startswith('Depends:'):
-                deps = line.split(':', 1)[1].strip()
-                dependencies.extend([d.strip() for d in deps.split(',')])
-
-        return Package(
-            name=package_name,
-            version=version,
-            description=description,
-            installed=True,
-            size=size,
-            dependencies=dependencies
-        )
+            stripped = line.strip()
+            if line.startswith((' ', '\t')) and capture_deps:
+                if stripped:
+                    info.dependencies.extend([d.strip() for d in stripped.split(',')])
+            elif stripped.startswith(('Depends:', 'Depends ')):
+                value = stripped.split(':', 1)[1].strip() if ':' in stripped else stripped
+                info.dependencies.extend([d.strip() for d in value.split(',') if d.strip()])
+            elif stripped.startswith('Description'):
+                info.description = stripped.split(':', 1)[1].strip() if ':' in stripped else stripped
+            elif stripped.startswith('Version'):
+                info.version = stripped.split(':', 1)[1].strip() if ':' in stripped else stripped
+            elif stripped.startswith('Installed-Size'):
+                info.size = stripped.split(':', 1)[1].strip() if ':' in stripped else stripped
+        return info
 
     def install_package(self, package_name: str, confirm: bool = True) -> bool:
         """Instala un paquete"""
@@ -142,27 +122,33 @@ class DebianAdapter(PackageAdapter):
             return []
 
         packages = []
-        current_package = None
-
+        current = None
         for line in stdout.split('\n'):
-            line = line.strip()
-            if not line:
+            stripped = line.strip()
+            if not stripped:
                 continue
+            first = line.split(None, 1)[0]
+            if not line.startswith((' ', '\t')) and '/' in first:
+                # Línea de paquete: "curl/stable,now 8.5.0-2 amd64 [...]"
+                if current:
+                    packages.append(current)
+                    current = None
+                name = first.split('/', 1)[0]
+                installed = '[installed' in line
+                version = ''
+                tokens = line.split()
+                if 'now' in tokens:
+                    idx = tokens.index('now')
+                    if idx + 1 < len(tokens):
+                        version = tokens[idx + 1]
+                elif len(tokens) > 1:
+                    version = tokens[1]
+                current = Package(name=name, version=version, installed=installed)
+            elif current:
+                current.description = (current.description + ' ' + stripped).strip()
 
-            # Formato: package/version
-            if line.startswith('N:'):
-                if current_package:
-                    packages.append(current_package)
-                current_package = Package(name=line[2:].strip(), installed=False)
-            elif current_package and line.startswith('Description:'):
-                current_package.description = line[12:].strip()
-            elif current_package and line.startswith('Current version:'):
-                current_package.version = line[16:].strip()
-                current_package.installed = True
-
-        if current_package:
-            packages.append(current_package)
-
+        if current:
+            packages.append(current)
         return packages
 
     def update_cache(self) -> bool:
@@ -186,47 +172,22 @@ class DebianAdapter(PackageAdapter):
             return []
 
         packages = []
-        lines = stdout.split('\n')[1:]  # Skip header
-
-        for line in lines:
-            if not line.strip():
+        for line in stdout.split('\n'):
+            match = RE_PKG_LINE.match(line.strip())
+            if not match:
                 continue
-
-            # Formato: package/oldversion/newversion/arch
-            parts = line.split('/')
-            if len(parts) >= 3:
-                package_name = parts[0].strip()
-                old_version = parts[1].strip()
-                new_version = parts[2].split('[')[0].strip()
-
-                package = Package(
-                    name=package_name,
-                    version=new_version,
-                    installed=True
-                )
-                packages.append(package)
-
+            packages.append(Package(
+                name=match.group(1), version=match.group(3), installed=True))
         return packages
 
     def get_dependencies(self, package_name: str) -> List[str]:
         """Obtiene las dependencias de un paquete"""
         try:
-            package = self.get_package_info(package_name)
-            return package.dependencies
+            return self.get_package_info(package_name).dependencies
         except PackageNotFoundError:
             return []
 
-    def _get_description(self, package_name: str) -> str:
-        """Obtiene la descripción de un paquete"""
-        try:
-            package = self.get_package_info(package_name)
-            return package.description
-        except PackageNotFoundError:
-            return ""
-
     def _get_category(self, package_name: str) -> str:
-        """Obtiene la categoría de un paquete"""
-        for category, packages in self.CATEGORIES.items():
-            if package_name in packages:
-                return category
-        return 'other'
+        """Categoría desde el dict compartido (sin subprocesos por paquete)."""
+        category = _shared_category(package_name)
+        return f"[{category}]" if category != 'other' else ""

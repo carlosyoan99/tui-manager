@@ -1,0 +1,22 @@
+name: tokyo-night
+dark: true
+palette:
+  bg: "#1a1b26"
+  fg: "#c0caf5"
+  accent: "#7aa2f7"
+  bg_alt: "#16161e"
+  fg_alt: "#a9b1d6"
+  red: "#f7768e"
+  green: "#9ece6a"
+  yellow: "#e0af68"
+  blue: "#7aa2f7"
+  magenta: "#bb9af7"
+  cyan: "#7dcfff"
+  black: "#15161e"
+  white: "#c0caf5"
+surfaces:
+  alacritty:
+    palette:
+      bg: "#1a1b26"
+      fg: "#c0caf5"
+      accent: "#7aa2f7"

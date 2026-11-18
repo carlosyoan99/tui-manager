@@ -10,10 +10,11 @@ Objetivo de la versión: la TUI arranca y hace bien tres cosas (paquetes, proces
 
 ### En progreso
 - Capa UI con textual: `ScreenManager`, `MainMenuScreen`, `PackageManagerScreen`, `ProcessMonitorScreen`, `SettingsScreen`, `HelpScreen` (pendiente de implementar; `main.py` ya importa `tui_manager.ui.screens`).
-- `config/default.yaml` y directorio `config/` real.
 - `tui-manager --version` y `--doctor`.
-- `TermuxAdapter` (apt del prefix, sin elevación) — plataforma de desarrollo actual.
-- Primeros tests con subprocesos simulados (mocks).
+
+### Simulación y validación
+- Suite de pruebas con **subprocesos simulados** (salidas reales canned de apt/pacman/dnf/xbps/pkg/pkgin/dpkg): 73 tests verdes.
+- Bugs corregidos gracias a la simulación: parsers de formato real (Arch `-Qi`/`-Ss`, Debian `apt search`, Fedora `dnf check-update` rc=100, Void `-l`/`-Rs`/`-S`), bloque de `pacman -Qi` perdido por línea en blanco, columnas corridas de `ps aux`, sudo innecesario en comandos de solo lectura, imports faltantes de `Package`, bloqueo por `_get_description` con un subproceso por paquete (eliminado).
 
 ### Documentación
 - **README.md** redefinido: definición (panel de control portable estilo Omarchy, no una distribución) y funcionamiento (arquitectura en capas, flujo de arranque, menú jerárquico mapeado de Omarchy, 5 principios de diseño).
@@ -46,6 +47,10 @@ Estado base documentado en `CREATION_SUMMARY.md` (sin fecha; pre-git).
 - Especificación completa: README, INSTALL, USAGE, API, MODULE_SPECS, TECHNICAL_SPECS, PROJECT_SUMMARY, CREATION_SUMMARY.
 - Núcleo implementado: `distribution.py` (detección Debian/Arch/Fedora/Void/Gentoo/OpenSUSE/Alpine), `config.py`, `event.py`, `package_manager.py` + adapters (`debian`, `arch`, `fedora`, `void`), `process_monitor.py`, `theme_manager.py` (dark/light/retro), `utils/logger.py`.
 - `main.py` (punto de entrada; falla al importar la capa UI aún no creada), `setup.py`, `requirements.txt`.
+- `categories.py`: 15 categorías y ~180 apps comunes compartidas por todos los adapters.
+- `environment.py`: plano de entorno (DE/WM) con modelo de capacidades; `system_control.py`; `theme_packs.py` + 5 packs en `config/themes/`.
+- i18n es/en (`tui_manager/i18n.py`); `config/default.yaml`.
+- Tests simulados multi-SO: `tests/` (conftest FakeRunner + adapters, distribución, entorno, temas, config, procesos).
 
 ---
 

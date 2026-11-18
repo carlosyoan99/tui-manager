@@ -1,32 +1,47 @@
 """
-Adapter para Void Linux usando xbps
+Adapter para Void Linux usando xbps. Formatos reales verificados:
+- xbps-query -l:   "ii bash-5.2.26_1   The GNU Bourne Again shell"
+- xbps-query -Rs:  "[*] curl-8.5.0_2   description" (instalado) / "[-] pkg-ver desc"
+- xbps-query -S:   campos "Description: ..." / "Version: ..." / "Depends: ..."
+- xbps-install -n: dry-run, lista "pkg-ver update to ..." o pkg-ver (actualizables)
 """
 
+import re
 import logging
 from typing import List
 from .package_adapter import PackageAdapter, Package, PackageNotFoundError
+from .categories import CATEGORIES as _BASE_CATEGORIES, get_category as _shared_category
 
 logger = logging.getLogger(__name__)
+
+RE_PKGVER = re.compile(r'^(?P<name>.+?)-(?P<version>[0-9][^\s]*)$')
+
+
+def split_pkgver(token: str):
+    """'bash-5.2.26_1' → ('bash', '5.2.26_1'); None si no coincide."""
+    match = RE_PKGVER.match(token)
+    if match:
+        return match.group('name'), match.group('version')
+    return None, None
 
 
 class VoidAdapter(PackageAdapter):
     """Gestor para Void Linux usando xbps"""
 
-    CATEGORIES = {
-        'development': ['base-devel', 'gcc', 'g++', 'make', 'cmake', 'git', 'python'],
-        'system': ['systemd', 'grub', 'linux', 'init', 'cronie'],
-        'multimedia': ['vlc', 'mpv', 'ffmpeg', 'gst-plugins-good'],
-        'network': ['networkmanager', 'openssh', 'curl', 'wget', 'git'],
-        'games': ['steam', 'lutris', 'wine'],
-        'office': ['libreoffice', 'thunderbird', 'evince', 'gimp'],
-        'utilities': ['vim', 'neovim', 'htop', 'tmux', 'bat', 'ripgrep', 'fzf'],
-        'security': ['ufw', 'fail2ban', 'openssh', 'firewalld'],
-        'database': ['postgresql', 'mysql', 'sqlite'],
-        'other': []
-    }
+    # xbps-query nunca necesita sudo; xbps-install/remove sí, salvo -n (dry-run).
+    _READONLY_PREFIX = 'xbps-query'
+
+    CATEGORIES = _BASE_CATEGORIES
+
+    def execute_command(self, command: List[str], sudo: bool = True) -> tuple:
+        if sudo and command and (
+                command[0] == self._READONLY_PREFIX
+                or command[:2] == ['xbps-install', '-n']):
+            sudo = False
+        return super().execute_command(command, sudo=sudo)
 
     def get_installed_packages(self) -> List[Package]:
-        """Obtiene la lista de paquetes instalados"""
+        """Obtiene la lista de paquetes instalados (descripción incluida en la línea)."""
         returncode, stdout, stderr = self.execute_command(['xbps-query', '-l'])
 
         if returncode != 0:
@@ -38,28 +53,19 @@ class VoidAdapter(PackageAdapter):
             line = line.strip()
             if not line:
                 continue
-
-            # Formato: l package.version
-            parts = line.split()
-            if len(parts) >= 2:
-                pkg_info = parts[1]
-                package_name = pkg_info.split(':')[0]
-                version = pkg_info.split(':')[1].split('-')[0]
-
-                # Obtener descripción
-                description = self._get_description(package_name)
-
-                # Obtener categoría
-                category = self._get_category(package_name)
-
-                package = Package(
-                    name=package_name,
-                    version=version,
-                    description=description,
-                    installed=True
-                )
-                packages.append(package)
-
+            parts = line.split(None, 2)
+            if len(parts) < 2:
+                continue
+            name, version = split_pkgver(parts[1])
+            if not name:
+                continue
+            description = parts[2].strip() if len(parts) > 2 else self._get_category(name)
+            packages.append(Package(
+                name=name,
+                version=version,
+                description=description,
+                installed=True,
+            ))
         logger.debug(f"Obtenidos {len(packages)} paquetes instalados")
         return packages
 
@@ -70,28 +76,21 @@ class VoidAdapter(PackageAdapter):
         if returncode != 0:
             raise PackageNotFoundError(f"Paquete '{package_name}' no encontrado")
 
-        description = ""
-        version = ""
-        dependencies = []
-
+        info = Package(name=package_name, installed=False)
         for line in stdout.split('\n'):
-            line = line.strip()
-            if line.startswith('Description'):
-                description = line.split(':', 1)[1].strip()
-            elif line.startswith('Version'):
-                version = line.split(':', 1)[1].strip()
-            elif line.startswith('Depends on'):
-                deps = line.split(':', 1)[1].strip()
-                if deps:
-                    dependencies = [d.strip() for d in deps.split(',')]
-
-        return Package(
-            name=package_name,
-            version=version,
-            description=description,
-            installed=False,  # En xbps-query -S no muestra si está instalado
-            dependencies=dependencies
-        )
+            stripped = line.strip()
+            if ':' not in stripped:
+                continue
+            key, _, value = stripped.partition(':')
+            key, value = key.strip().lower(), value.strip()
+            if key in ('description', 'short_desc'):
+                info.description = value
+            elif key == 'version':
+                info.version = value
+            elif key in ('depends', 'depends_on'):
+                if value:
+                    info.dependencies = [d.strip() for d in value.split(',')]
+        return info
 
     def install_package(self, package_name: str, confirm: bool = True) -> bool:
         """Instala un paquete"""
@@ -130,7 +129,7 @@ class VoidAdapter(PackageAdapter):
         return True
 
     def search_packages(self, query: str) -> List[Package]:
-        """Busca paquetes por nombre o descripción"""
+        """Busca en repos: xbps-query -Rs → '[*] curl-8.5.0_2 desc' / '[-] ...'"""
         returncode, stdout, stderr = self.execute_command(['xbps-query', '-Rs', query])
 
         if returncode != 0:
@@ -138,33 +137,28 @@ class VoidAdapter(PackageAdapter):
             return []
 
         packages = []
-        current_package = None
-
         for line in stdout.split('\n'):
             line = line.strip()
-            if not line:
+            if not line or not line.startswith('['):
                 continue
-
-            # Formato: package.version description
-            if line.startswith(''):
-                if current_package:
-                    packages.append(current_package)
-                # Extraer nombre y versión
-                parts = line.split(None, 1)
-                if len(parts) >= 1:
-                    current_package = Package(name=parts[0])
-            elif current_package:
-                current_package.description = line
-
-        if current_package:
-            packages.append(current_package)
-
+            parts = line.split(None, 2)
+            status = parts[0]           # [*] instalado, [-] no instalado
+            name, version = split_pkgver(parts[1]) if len(parts) > 1 else (None, None)
+            if not name:
+                continue
+            description = parts[2].strip() if len(parts) > 2 else ''
+            packages.append(Package(
+                name=name,
+                version=version,
+                description=description,
+                installed=status == '[*]',
+            ))
         return packages
 
     def update_cache(self) -> bool:
-        """Actualiza la caché de paquetes"""
+        """Actualiza la caché de repos"""
         print("\nActualizando caché de paquetes...")
-        returncode, stdout, stderr = self.execute_command(['xbps-install', '-Syu'])
+        returncode, stdout, stderr = self.execute_command(['xbps-install', '-S'])
 
         if returncode != 0:
             logger.error(f"Error al actualizar caché: {stderr}")
@@ -174,8 +168,8 @@ class VoidAdapter(PackageAdapter):
         return True
 
     def get_updates_available(self) -> List[Package]:
-        """Obtiene la lista de paquetes que pueden ser actualizados"""
-        returncode, stdout, stderr = self.execute_command(['xbps-query', '-u'])
+        """Actualizables: xbps-install -n (dry-run). Cada línea incluye pkg-version."""
+        returncode, stdout, stderr = self.execute_command(['xbps-install', '-n'])
 
         if returncode != 0:
             logger.error(f"Error al obtener actualizaciones: {stderr}")
@@ -183,41 +177,31 @@ class VoidAdapter(PackageAdapter):
 
         packages = []
         for line in stdout.split('\n'):
-            if line.strip():
-                # Formato: package oldversion newversion
-                parts = line.split()
-                if len(parts) >= 3:
-                    package_name = parts[0]
-                    new_version = parts[2]
-
-                    package = Package(
-                        name=package_name,
-                        version=new_version,
-                        installed=True
-                    )
-                    packages.append(package)
-
+            line = line.strip()
+            if not line:
+                continue
+            name, version = split_pkgver(line.split()[0])
+            if not name:
+                continue
+            packages.append(Package(name=name, version=version, installed=True))
         return packages
+
+    def remove_orphans(self) -> bool:
+        """Elimina huérfanos: xbps-remove -o."""
+        returncode, stdout, stderr = self.execute_command(['xbps-remove', '-y', '-o'])
+        if returncode != 0:
+            logger.error(f"Error al remover huérfanos: {stderr}")
+            return False
+        return True
 
     def get_dependencies(self, package_name: str) -> List[str]:
         """Obtiene las dependencias de un paquete"""
         try:
-            package = self.get_package_info(package_name)
-            return package.dependencies
+            return self.get_package_info(package_name).dependencies
         except PackageNotFoundError:
             return []
 
-    def _get_description(self, package_name: str) -> str:
-        """Obtiene la descripción de un paquete"""
-        try:
-            package = self.get_package_info(package_name)
-            return package.description
-        except PackageNotFoundError:
-            return ""
-
     def _get_category(self, package_name: str) -> str:
-        """Obtiene la categoría de un paquete"""
-        for category, packages in self.CATEGORIES.items():
-            if package_name in packages:
-                return category
-        return 'other'
+        """Categoría desde el dict compartido (sin subprocesos por paquete)."""
+        category = _shared_category(package_name)
+        return f"[{category}]" if category != 'other' else ""

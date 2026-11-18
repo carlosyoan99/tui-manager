@@ -113,9 +113,9 @@ class PkgsrcAdapter(PackageAdapter):
         return True
 
     def get_updates_available(self) -> List[Package]:
-        # pkgin install sin -y lista lo que actualizaría; usamos "pkgin upgrade" en seco
+        # pkgin -n install: dry-run con lo que actualizaría
         returncode, stdout, stderr = self.execute_command(
-            ['pkgin', 'ugn'], sudo=self._needs_sudo()
+            ['pkgin', '-n', 'install'], sudo=self._needs_sudo()
         )
         if returncode != 0:
             logger.error(f"Error al obtener actualizaciones: {stderr}")
@@ -124,7 +124,7 @@ class PkgsrcAdapter(PackageAdapter):
         for line in stdout.split('\n'):
             token = line.strip().split(' ')[0]
             name, _, version = token.rpartition('-')
-            if name and version:
+            if name and version and version[0].isdigit():
                 packages.append(Package(name=name, version=version, installed=True))
         return packages
 

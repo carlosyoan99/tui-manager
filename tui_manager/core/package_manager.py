@@ -48,6 +48,7 @@ class PackageManager:
             'endeavouros': ArchAdapter,
             'garuda': ArchAdapter,
             'artix': ArchAdapter,
+            'cachyos': ArchAdapter,
             'fedora': FedoraAdapter,
             'rhel': FedoraAdapter,
             'centos': FedoraAdapter,

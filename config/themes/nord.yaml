@@ -1,0 +1,22 @@
+name: nord
+dark: true
+palette:
+  bg: "#2e3440"
+  fg: "#d8dee9"
+  accent: "#88c0d0"
+  bg_alt: "#242933"
+  fg_alt: "#e5e9f0"
+  red: "#bf616a"
+  green: "#a3be8c"
+  yellow: "#ebcb8b"
+  blue: "#81a1c1"
+  magenta: "#b48ead"
+  cyan: "#8fbcbb"
+  black: "#2e3440"
+  white: "#d8dee9"
+surfaces:
+  alacritty:
+    palette:
+      bg: "#2e3440"
+      fg: "#d8dee9"
+      accent: "#88c0d0"

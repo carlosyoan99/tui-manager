@@ -1,11 +1,15 @@
 """
-Adapter para Arch Linux usando pacman
+Adapter para Arch Linux (y derivados: Manjaro, CachyOS, EndeavourOS…)
+Formatos reales verificados:
+- pacman -Qi:    bloques "Name            : pkg" / "Version : x" / "Description : y"
+- pacman -Ss q:  "repo/name 1.0-1 [installed]" + descripción indentada
+- pacman -Qu:    "pkg old-version new-version"
 """
 
-import re
 import logging
 from typing import List
 from .package_adapter import PackageAdapter, Package, PackageNotFoundError
+from .categories import CATEGORIES as _BASE_CATEGORIES, get_category as _shared_category
 
 logger = logging.getLogger(__name__)
 
@@ -13,46 +17,54 @@ logger = logging.getLogger(__name__)
 class ArchAdapter(PackageAdapter):
     """Gestor para Arch Linux usando pacman"""
 
-    CATEGORIES = {
-        'development': ['base-devel', 'gcc', 'g++', 'make', 'cmake', 'git', 'python'],
-        'system': ['systemd', 'grub', 'linux', 'init', 'cronie'],
-        'multimedia': ['vlc', 'mpv', 'ffmpeg', 'gst-plugins-good', 'gst-plugins-bad'],
-        'network': ['networkmanager', 'openssh', 'curl', 'wget', 'git'],
-        'games': ['steam', 'lutris', 'wine', 'gamescope'],
-        'office': ['libreoffice-fresh', 'thunderbird', 'evince', 'gimp'],
-        'utilities': ['vim', 'neovim', 'htop', 'tmux', 'bat', 'ripgrep', 'fzf'],
-        'security': ['ufw', 'fail2ban', 'openssh', 'firewalld'],
-        'database': ['postgresql', 'mysql', 'sqlite'],
-        'other': []
-    }
+    # pacman -Q*/-Ss son de lectura; -S/-R requieren root.
+    _READONLY = {('pacman', '-Qi'), ('pacman', '-Si'),
+                 ('pacman', '-Ss'), ('pacman', '-Qu')}
+
+    CATEGORIES = _BASE_CATEGORIES
+
+    def execute_command(self, command: List[str], sudo: bool = True) -> tuple:
+        if sudo and len(command) > 1 and (command[0], command[1]) in self._READONLY:
+            sudo = False
+        return super().execute_command(command, sudo=sudo)
 
     def get_installed_packages(self) -> List[Package]:
-        """Obtiene la lista de paquetes instalados"""
-        returncode, stdout, stderr = self.execute_command(['pacman', '-Q', '--info'])
+        """Lista instalada vía pacman -Qi (un subproceso, formatos reales)."""
+        returncode, stdout, stderr = self.execute_command(['pacman', '-Qi'])
 
         if returncode != 0:
             logger.error(f"Error al obtener paquetes: {stderr}")
             return []
 
         packages = []
-        current_package = None
-
+        current = None
         for line in stdout.split('\n'):
-            if line.startswith('Package '):
-                if current_package:
-                    packages.append(current_package)
-                current_package = Package(name=line.split()[1])
-            elif current_package and line.startswith('Version '):
-                current_package.version = line.split()[1]
-            elif current_package and line.startswith('Description '):
-                current_package.description = line[12:].strip()
-            elif current_package and line.startswith('Depends On '):
-                deps = line[11:].strip()
-                if deps:
-                    current_package.dependencies = [d.strip() for d in deps.split(',')]
+            if not line.strip():
+                # línea en blanco separa bloques: guardar el bloque actual
+                if current:
+                    packages.append(current)
+                    current = None
+                continue
+            if ':' not in line:
+                continue
+            key, _, value = line.partition(':')
+            key = key.strip()
+            value = value.strip()
+            if key == 'Name':
+                if current:
+                    packages.append(current)
+                current = Package(name=value, installed=True)
+            elif current is not None:
+                if key == 'Version':
+                    current.version = value
+                elif key == 'Description':
+                    current.description = value
+                elif key == 'Depends On':
+                    if value:
+                        current.dependencies = [d.strip() for d in value.split(',')]
 
-        if current_package:
-            packages.append(current_package)
+        if current:
+            packages.append(current)
 
         logger.debug(f"Obtenidos {len(packages)} paquetes instalados")
         return packages
@@ -64,28 +76,20 @@ class ArchAdapter(PackageAdapter):
         if returncode != 0:
             raise PackageNotFoundError(f"Paquete '{package_name}' no encontrado")
 
-        description = ""
-        version = ""
-        dependencies = []
-
+        info = Package(name=package_name, installed=False)
         for line in stdout.split('\n'):
-            line = line.strip()
-            if line.startswith('Description'):
-                description = line.split(':', 1)[1].strip()
-            elif line.startswith('Version'):
-                version = line.split(':', 1)[1].strip()
-            elif line.startswith('Depends On'):
-                deps = line.split(':', 1)[1].strip()
-                if deps:
-                    dependencies = [d.strip() for d in deps.split(',')]
-
-        return Package(
-            name=package_name,
-            version=version,
-            description=description,
-            installed=False,  # En pacman -Si no muestra si está instalado
-            dependencies=dependencies
-        )
+            if ':' not in line:
+                continue
+            key, _, value = line.partition(':')
+            key, value = key.strip(), value.strip()
+            if key == 'Description':
+                info.description = value
+            elif key == 'Version':
+                info.version = value
+            elif key == 'Depends On':
+                if value:
+                    info.dependencies = [d.strip() for d in value.split(',')]
+        return info
 
     def install_package(self, package_name: str, confirm: bool = True) -> bool:
         """Instala un paquete"""
@@ -96,7 +100,8 @@ class ArchAdapter(PackageAdapter):
                 print("Instalación cancelada")
                 return False
 
-        returncode, stdout, stderr = self.execute_command(['pacman', '-S', '--noconfirm', package_name])
+        returncode, stdout, stderr = self.execute_command(
+            ['pacman', '-S', '--noconfirm', package_name])
 
         if returncode != 0:
             logger.error(f"Error al instalar {package_name}: {stderr}")
@@ -114,7 +119,8 @@ class ArchAdapter(PackageAdapter):
                 print("Desinstalación cancelada")
                 return False
 
-        returncode, stdout, stderr = self.execute_command(['pacman', '-R', '--noconfirm', package_name])
+        returncode, stdout, stderr = self.execute_command(
+            ['pacman', '-R', '--noconfirm', package_name])
 
         if returncode != 0:
             logger.error(f"Error al desinstalar {package_name}: {stderr}")
@@ -124,7 +130,7 @@ class ArchAdapter(PackageAdapter):
         return True
 
     def search_packages(self, query: str) -> List[Package]:
-        """Busca paquetes por nombre o descripción"""
+        """Busca paquetes por nombre o descripción (formato repo/name)."""
         returncode, stdout, stderr = self.execute_command(['pacman', '-Ss', query])
 
         if returncode != 0:
@@ -132,29 +138,24 @@ class ArchAdapter(PackageAdapter):
             return []
 
         packages = []
-        current_package = None
-
+        current = None
         for line in stdout.split('\n'):
-            line = line.strip()
-            if not line:
+            if not line.strip():
                 continue
+            if not line.startswith((' ', '\t')):
+                if current:
+                    packages.append(current)
+                tokens = line.split()
+                full = tokens[0]  # repo/name
+                name = full.split('/', 1)[1] if '/' in full else full
+                version = tokens[1] if len(tokens) > 1 else ''
+                installed = '[installed]' in line
+                current = Package(name=name, version=version, installed=installed)
+            elif current:
+                current.description = (current.description + ' ' + line.strip()).strip()
 
-            # Formato: [nombre] descripción
-            if line.startswith('['):
-                if current_package:
-                    packages.append(current_package)
-                name_end = line.find(']')
-                if name_end != -1:
-                    current_package = Package(name=line[1:name_end])
-            elif current_package and not line.startswith(' '):
-                # Es parte de la descripción
-                current_package.description = line
-            elif current_package:
-                current_package.description += ' ' + line
-
-        if current_package:
-            packages.append(current_package)
-
+        if current:
+            packages.append(current)
         return packages
 
     def update_cache(self) -> bool:
@@ -179,33 +180,20 @@ class ArchAdapter(PackageAdapter):
 
         packages = []
         for line in stdout.split('\n'):
-            if line.strip():
-                # Formato: package oldversion newversion
-                parts = line.split()
-                if len(parts) >= 3:
-                    package_name = parts[0]
-                    new_version = parts[2]
-
-                    package = Package(
-                        name=package_name,
-                        version=new_version,
-                        installed=True
-                    )
-                    packages.append(package)
-
+            parts = line.split()
+            if len(parts) >= 3:
+                packages.append(Package(
+                    name=parts[0], version=parts[2], installed=True))
         return packages
 
     def get_dependencies(self, package_name: str) -> List[str]:
         """Obtiene las dependencias de un paquete"""
         try:
-            package = self.get_package_info(package_name)
-            return package.dependencies
+            return self.get_package_info(package_name).dependencies
         except PackageNotFoundError:
             return []
 
     def _get_category(self, package_name: str) -> str:
-        """Obtiene la categoría de un paquete"""
-        for category, packages in self.CATEGORIES.items():
-            if package_name in packages:
-                return category
-        return 'other'
+        """Categoría desde el dict compartido (sin subprocesos por paquete)."""
+        category = _shared_category(package_name)
+        return f"[{category}]" if category != 'other' else ""
