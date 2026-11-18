@@ -319,3 +319,36 @@ def get_apps_by_category(category: str) -> List[AppEntry]:
 def get_all_categories() -> Dict[str, str]:
     """Obtiene todas las categorías"""
     return CATEGORIES.copy()
+
+# ---------------------------------------------------------------- stacks ---
+# Stacks por rol: paquetes del propio catálogo que se instalan en lote.
+# Los nombres son los usados por los adapters de cada distribución.
+STACKS: Dict[str, List[str]] = {
+    'dev': [
+        'git', 'python3', 'nodejs', 'code', 'neovim',
+        'direnv', 'ripgrep', 'gdb', 'postgresql',
+    ],
+    'terminal': [
+        'alacritty', 'tmux', 'zellij', 'fzf', 'ripgrep',
+        'bat', 'starship', 'htop', 'lazygit',
+    ],
+    'web': [
+        'firefox', 'chromium', 'brave-browser',
+        'qutebrowser', 'newsboat',
+    ],
+}
+
+def get_stack_roles() -> List[str]:
+    """Devuelve los roles de stack disponibles (dev, terminal, web)."""
+    return list(STACKS)
+
+def get_stack(role: str) -> List[str]:
+    """Devuelve una copia de los paquetes del stack `role`.
+
+    Raises:
+        ValueError: si el rol no existe.
+    """
+    if role not in STACKS:
+        raise ValueError(
+            f"Stack desconocido {role!r}; roles disponibles: {', '.join(STACKS)}")
+    return list(STACKS[role])
