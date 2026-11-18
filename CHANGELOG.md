@@ -4,6 +4,30 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ---
 
+## [0.5.0-beta.1] — 2026-11-18 — Fase Beta 1 «Pulido e integración» (completada)
+
+Sin funciones nuevas. Cuatro agentes en paralelo (Arquitecto, dos Implementadores
+y Documentador) más verificación final.
+
+### Cambiado
+- **B1-1**: normalización NFKD + aliases es/en replicada en `DebianAdapter`,
+  `VoidAdapter` y `TermuxAdapter` (9 tests nuevos, 54 en adapters).
+- **B1-2**: flujo instalar → recargar → notify en `finally` (sin workers anidados);
+  8 estados vacíos uniformes con la clase `status` y claves i18n existentes.
+- **B1-3**: `tests/manual-checklist.md` con 40 ítems sobre 10 pantallas;
+  USAGE y API documentan mensajes accionables, ayuda contextual y rollback.
+- Versión del paquete y CLI a `0.5.0-beta.1`.
+
+### Validación
+- **167 tests verdes**, py_compile OK, smoke de TUI y `--doctor` correctos.
+- 146 claves i18n usadas, 0 faltantes; 0 `traceback.print`.
+
+### Decisión pendiente
+- La decisión 6 del roadmap asigna C/D/F a Beta 1, pero el trabajo de Beta 1
+  excluye funciones nuevas y C/F están en Alfa 4. Requiere definición antes de Beta 2.
+
+---
+
 ## [0.3.0-alpha.3] — 2026-11-18 — Fase Alfa 3 «Catálogo y fuentes» (completada)
 
 Objetivo: ampliar el catálogo de aplicaciones recomendadas con categorías ricas y

@@ -78,3 +78,28 @@ usuario (0 paquetes en CachyOS) quedó resuelto y verificado en vivo.
 
 **Recomendación:** proceder con **ST-4 (documentación)** en el Día 6 y dejar para el
 Día 7 la decisión sobre ampliar el equipo a 4–5 agentes para Beta 1.
+
+---
+
+# QA-REPORT — Beta 1 (0.5.x) «Pulido e integración»
+
+**Verificador:** Agente 4 · **Rango:** `4344226..267b01a` · **Fecha:** 2026-11-18
+
+| Subtarea | Commit | Tests | py_compile | Smoke | Estado |
+|---|---|---|---|---|---|
+| B1-1 parsers localizados Debian/Void/Termux | `daac410` | 54 en adapters | OK | OK | ACEPTAR |
+| B1-2 estados vacíos + flujo instalar/recargar/notify | `267b01a` | 26 en UI | OK | OK | ACEPTAR |
+| B1-3 checklist y docs | `daac410` | 40 ítems en checklist | N/A | OK | ACEPTAR |
+| B1-4 verificación | — | **167 passed**, 0 fallos | OK | OK | ACEPTAR |
+
+**Criterios de salida del roadmap verificados:**
+1. Checklist `tests/manual-checklist.md` cubre las 10 pantallas (para validación guiada en las 4 plataformas). ✅ documentado
+2. Acciones destructivas con confirmación y rastro en el log. ✅ (heredado de Alfa 3, verificado en QA anterior)
+3. Ninguna pantalla bloquea >500 ms. ⚠️ **no medido automáticamente**: queda como ítem del checklist manual.
+
+**Observaciones:**
+- 146 claves i18n usadas, 0 faltantes; 0 `traceback.print` en los cambios.
+- `--version` aún reportaba `0.3.0-alpha.3` al cierre; se corrige en este commit a `0.5.0-beta.1`.
+- **Decisión pendiente (no tomada por el agente):** la decisión 6 del roadmap asigna C/D/F a Beta 1, pero el trabajo de Beta 1 dice "no añade funciones nuevas" y C/F están en Alfa 4. Requiere tu criterio.
+
+> ## ✅ ACEPTAR (con la observación de versión corregida y la decisión C/D/F pendiente)
