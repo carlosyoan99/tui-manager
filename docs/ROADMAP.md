@@ -49,6 +49,9 @@ Trabajo:
 - [ ] `FreeBSDAdapter` de paquetes (`pkg`) + soporte `doas` además de sudo [BSD].
 - [ ] Detección de NetBSD/OpenBSD (pkgsrc/pkg_add) como adaptador experimental.
 - [ ] Backups automáticos antes de modificar configs del WM (`archivo.bak-tm`).
+- [ ] **A · Launch-or-focus** [OM]: lanzar apps desde la TUI (dispatch exec del WM, `gtk-launch` o setsid como fallback); foco si ya corre (`wmctrl -a` cuando exista).
+- [ ] **B · Info del sistema**: pantalla «Acerca de» — SO, kernel, RAM, disco, batería (termux-battery-status en Termux), N paquetes [OM].
+- [ ] **E · Visor de logs**: ver el log de la app dentro de la TUI con refresco; complemento de `--doctor` [OM].
 
 **Criterios de salida:**
 1. En Hyprland y en i3 reales: gaps y wallpaper conmutables desde el menú Sistema/Temas con backup previo.
@@ -71,6 +74,9 @@ Trabajo:
 - [ ] Instalación/remoción de packs de temas desde el propio menú (carpeta local + URL).
 - [ ] Menú **Actualizar** completo: disponibles, actualizar sistema, huérfanos, caché [OM].
 - [ ] Snapshots de configuración propia (backup/restore de `~/.config/tui-manager`).
+- [ ] **C · Stacks recomendados** [OM]: catálogo YAML portátil de apps por rol (editor, terminal, navegador, dev) que usa el plano de paquetes.
+- [ ] **D · Actualización de firmware (opcional)** [OM]: sección del menú Actualizar si `fwupdmgr` está presente.
+- [ ] **F · Snapshots extendidos** [OM]: backup/restore de configs del WM y bar (sobre `.bak-tm`); nunca snapshots de sistema (btrfs/zfs).
 - [ ] Paginación y caché de listas largas de paquetes; refresco asíncrono de procesos (no bloquea la UI).
 
 **Criterios de salida:**
@@ -145,19 +151,37 @@ Se declaran **todos** obligatorios (no es una lista de deseos, es una barrera):
 3. **BSD: FreeBSD primero** en Alfa 2; OpenBSD/NetBSD post-1.0.
 4. **Nombre: `tui-manager`** para PyPI y comando de CLI.
 5. **i18n (es/en) desde Alfa 1.**
-6. **Funciones nuevas adoptadas de la investigación de Omarchy** (2026-11-18):
-   - **Al roadmap actual** (simples, bajo costo): A · Launch-or-focus (Alfa 2), B · Info del sistema «Acerca de» (Alfa 2), E · Visor de logs de la app dentro de la TUI (Alfa 2).
-   - **Al backlog futuro** (complejas, fuera del roadmap): C · Stacks recomendados, D · fwupd, F · snapshots extendidos de configs del WM, G · Webapps, H · Integración agéntica, I · capacidades de hardware (hibernación/screensaver).
+6. **Funciones nuevas adoptadas de la investigación de Omarchy** (2026-11-18, A–I completas, en el roadmap):
+   - **Alfa 2**: A · Launch-or-focus, B · Info del sistema «Acerca de», E · Visor de logs.
+   - **Beta 1**: C · Stacks recomendados, D · fwupd opcional, F · Snapshots extendidos (configs del WM).
+   - **Post-1.0 planeado**: G · Webapps, H · Integración agéntica, I · Capacidades de hardware.
+7. **Soporte macOS y Windows planificado para la versión 2.0** (no en 1.0): macOS vía Homebrew y `defaults`/`osascript`; Windows vía winget/scoop/choco y `tasklist`/`taskkill`. Ver fase «2.0» en este roadmap.
 
-## Backlog — funciones planeadas a futuro (post-1.0)
+## Post-1.0 — fase planeada (G · H · I)
 
-Funciones adoptadas de la investigación de Omarchy pero **complejas**: se planifican a futuro, sin entrar al roadmap de fases actual. Se priorizarán solo después de 1.0 estable, y cada una entrará al roadmap con sus propios criterios.
+Adoptadas al roadmap (2026-11-18) como fase siguiente a 1.0. Se priorizarán después de 1.0 estable y cada una entrará con sus propios criterios al promoverse.
 
 | # | Función | Origen Omarchy | Idea para TUI Manager |
 |---|---|---|---|
-| C | Stacks recomendados | menú Install (dev-env, gaming, navegadores) | Catálogo YAML portátil de apps por rol (editor, terminal, navegador, dev) |
-| D | Actualización de firmware | `omarchy-update-firmware` | `fwupdmgr` si está presente (opcional) |
-| F | Snapshots extendidos | `omarchy-snapshot` | Backup/restore de configs del WM y bar; nunca snapshots de sistema (btrfs/zfs) |
 | G | Webapps | `omarchy-webapp-install` | Sitios como apps dedicadas vía navegador del entorno |
 | H | Integración agéntica | Omarchy 4 (agentes) | CLI estructurada y amigable para agentes de IA |
 | I | Capacidades de hardware | `omarchy-toggle-*`, hibernación, screensaver | Cada capacidad vive o muere según el `EnvironmentAdapter`; nada asumido |
+
+---
+
+## 2.0 — macOS y Windows (planeada)
+
+Soporte **nativo** a macOS y Windows, extendiendo los dos planos de adaptadores (SO y entorno) definidos en la spec técnica. No forma parte de los criterios de 1.0.
+
+### macOS
+- **Paquetes**: `MacOSAdapter` (Homebrew: `brew search/info/install/remove`, `brew update/upgrade`; `brew services` opcional).
+- **Entorno**: `MacOSAdapter` de entorno — wallpaper vía `osascript`, modo oscuro vía `defaults write -g AppleInterfaceStyle`, launch-or-focus con `open -a`.
+- **Procesos**: `ps`/`kill` nativos (BSD userland — el ProcessMonitor ya es portable a BSD ps).
+
+### Windows
+- **Paquetes**: `WindowsAdapter` con detección en orden winget → scoop → choco (`winget search/install/uninstall`, `scoop install`, `choco`).
+- **Procesos**: `tasklist`/`taskkill` (y PowerShell `Get-Process`) detrás del mismo ProcessMonitor.
+- **Entorno**: `WindowsAdapter` — personalización vía registro (`HKCU\Software\Microsoft\Windows\CurrentVersion\Themes`), wallpaper vía `win32` API, terminal Windows.
+- **Requisito**: textual corre en Windows Terminal; la TUI debe validar capacidades de consola.
+
+Criterios de salida: se definirán al promover la fase; primer objetivo es Alfa-equivalente (paquetes + procesos) en cada SO.

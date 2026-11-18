@@ -24,6 +24,7 @@ Su propósito: desde un solo menú jerárquico, navegable 100 % por teclado, pod
 | Objetivo principal | **Debian/Ubuntu, Arch y derivados, Fedora, Void, Gentoo, OpenSUSE, Alpine, FreeBSD** | Foco en gestores de ventanas |
 | Objetivo secundario | NetBSD, OpenBSD, derivados de las anteriores | Vía adaptadores del mismo plano |
 | Limitado | **Termux/Android** | Paquetes del prefix (apt/`pkg`), procesos propios, temas internos de la TUI; sin sudo ni toggles de sistema |
+| Futuro 2.0 | **macOS** (Homebrew, `defaults`, `osascript`) · **Windows** (winget/scoop/choco, `tasklist`) | Planificado; ver fase «2.0» en [docs/ROADMAP.md](docs/ROADMAP.md) |
 
 | Nivel | Entornos | Soporte esperado |
 |---|---|---|

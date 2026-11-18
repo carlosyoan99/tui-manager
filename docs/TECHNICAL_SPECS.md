@@ -689,6 +689,8 @@ Ya implementado en `core/`: `DebianAdapter`, `ArchAdapter`, `FedoraAdapter`, `Vo
 | `FreeBSDAdapter` | FreeBSD | pkg | `pkg search/info`, `pkg install/remove`, `pkg autoremove` |
 | `PkgsrcAdapter` (exp.) | NetBSD/OpenBSD | pkg_add/pkgin | `pkgin search`, `pkg_add/r` |
 | `TermuxAdapter` | Android (Termux) | apt/pkg del prefix | `pkg search`, `pkg install/remove` (envoltorio de apt, repos de Termux) |
+| `MacOSAdapter` *(2.0)* | macOS | Homebrew | `brew search/info`, `brew install/remove`, `brew update/upgrade` |
+| `WindowsAdapter` *(2.0)* | Windows | winget/scoop/choco | `winget search/install/uninstall`, `scoop install`, `choco` (detección en ese orden) |
 
 **Elevación de privilegios**: se detecta `sudo` o `doas` (BSD) y se usa el disponible; nunca se guardan credenciales. **En Termux/Android no hay elevación**: todos los comandos corren como usuario del prefix (`/data/data/com.termux`), y las acciones de sistema (toggles, energía) no aplican.
 
