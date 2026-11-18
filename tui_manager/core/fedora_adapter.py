@@ -4,7 +4,7 @@ Adapter para Fedora usando dnf
 
 import logging
 from typing import List
-from .package_adapter import PackageAdapter, PackageNotFoundError
+from .package_adapter import PackageAdapter, Package, PackageNotFoundError
 
 logger = logging.getLogger(__name__)
 

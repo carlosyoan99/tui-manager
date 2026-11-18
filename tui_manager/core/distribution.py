@@ -24,8 +24,19 @@ class DistributionDetector:
         'fedora', 'rhel', 'centos', 'rocky', 'almalinux',
         'void', 'gentoo',
         'opensuse', 'suse',
-        'alpine'
+        'alpine',
+        'termux',
+        'freebsd', 'dragonfly',
+        'netbsd', 'openbsd',  # experimentales (pkgsrc)
     ]
+
+    @staticmethod
+    def is_termux() -> bool:
+        """Detecta Termux/Android vía variables de entorno [TERMUX]."""
+        return (
+            bool(os.environ.get('TERMUX_VERSION'))
+            or 'com.termux' in os.environ.get('PREFIX', '')
+        )
 
     @staticmethod
     def detect() -> str:
@@ -38,6 +49,10 @@ class DistributionDetector:
         Raises:
             DistributionError: Si no se puede detectar la distribución
         """
+        # Termux/Android primero: no hay /etc/*-release estándar [TERMUX]
+        if DistributionDetector.is_termux():
+            return 'termux'
+
         # Detectar por archivos específicos de distribución
         if os.path.exists('/etc/debian_version'):
             # Debian o Ubuntu
@@ -88,6 +103,12 @@ class DistributionDetector:
                 return distro
         except Exception as e:
             logger.debug(f"lsb_release no disponible: {e}")
+
+        # Fallback por kernel (BSD sin os-release)
+        import platform
+        system = platform.system()
+        if system in ('FreeBSD', 'NetBSD', 'OpenBSD', 'DragonFly'):
+            return system.lower() if system != 'DragonFly' else 'dragonfly'
 
         # No se pudo detectar
         logger.error("No se pudo detectar la distribución")

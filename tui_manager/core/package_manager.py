@@ -4,11 +4,14 @@ Gestor principal de paquetes
 
 import logging
 from typing import List, Optional
-from .package_adapter import PackageAdapter, PackageNotFoundError
+from .package_adapter import PackageAdapter, Package, PackageNotFoundError
 from .debian_adapter import DebianAdapter
 from .arch_adapter import ArchAdapter
 from .fedora_adapter import FedoraAdapter
 from .void_adapter import VoidAdapter
+from .termux_adapter import TermuxAdapter
+from .freebsd_adapter import FreeBSDAdapter
+from .pkgsrc_adapter import PkgsrcAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +54,11 @@ class PackageManager:
             'rocky': FedoraAdapter,
             'almalinux': FedoraAdapter,
             'void': VoidAdapter,
+            'termux': TermuxAdapter,
+            'freebsd': FreeBSDAdapter,
+            'dragonfly': FreeBSDAdapter,
+            'netbsd': PkgsrcAdapter,
+            'openbsd': PkgsrcAdapter,
         }
 
         adapter_class = adapters.get(self.distribution.lower())

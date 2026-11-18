@@ -4,7 +4,7 @@ Adapter para Void Linux usando xbps
 
 import logging
 from typing import List
-from .package_adapter import PackageAdapter, PackageNotFoundError
+from .package_adapter import PackageAdapter, Package, PackageNotFoundError
 
 logger = logging.getLogger(__name__)
 
