@@ -42,7 +42,7 @@ class PkgsrcAdapter(PackageAdapter):
     def get_installed_packages(self) -> List[Package]:
         # pkgin list: "pkg-1.2.3 has been installed"
         returncode, stdout, stderr = self.execute_command(
-            ['pkgin', 'list'], sudo=self._needs_sudo()
+            ['pkgin', 'list'], sudo=False
         )
         if returncode != 0:
             logger.error(f"Error al obtener paquetes: {stderr}")
@@ -61,11 +61,11 @@ class PkgsrcAdapter(PackageAdapter):
 
     def get_package_info(self, package_name: str) -> Package:
         returncode, stdout, stderr = self.execute_command(
-            ['pkgin', 'show-deps', package_name], sudo=self._needs_sudo()
+            ['pkgin', 'show-deps', package_name], sudo=False
         )
         deps = [l.strip() for l in stdout.split('\n') if l.strip()]
         returncode2, stdout2, _ = self.execute_command(
-            ['pkgin', 'search', f'^{package_name}$'], sudo=self._needs_sudo()
+            ['pkgin', 'search', f'^{package_name}$'], sudo=False
         )
         if returncode2 != 0 or not stdout2.strip():
             raise PackageNotFoundError(f"Paquete '{package_name}' no encontrado")
@@ -102,7 +102,7 @@ class PkgsrcAdapter(PackageAdapter):
 
     def search_packages(self, query: str) -> List[Package]:
         returncode, stdout, stderr = self.execute_command(
-            ['pkgin', 'search', query], sudo=self._needs_sudo()
+            ['pkgin', 'search', query], sudo=False
         )
         if returncode != 0:
             logger.error(f"Error al buscar paquetes: {stderr}")
@@ -133,7 +133,7 @@ class PkgsrcAdapter(PackageAdapter):
     def get_updates_available(self) -> List[Package]:
         # pkgin -n install: dry-run con lo que actualizaría
         returncode, stdout, stderr = self.execute_command(
-            ['pkgin', '-n', 'install'], sudo=self._needs_sudo()
+            ['pkgin', '-n', 'install'], sudo=False
         )
         if returncode != 0:
             logger.error(f"Error al obtener actualizaciones: {stderr}")

@@ -4,7 +4,34 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ---
 
-## [0.2.0-alpha.2] — En desarrollo — Fase Alfa 2 «Plano de entorno»
+## [0.3.0-alpha.3] — En desarrollo — Fase Alfa 3 «Catálogo y fuentes»
+
+Objetivo: ampliar el catálogo de aplicaciones recomendadas con categorías ricas y
+permitir instalar desde fuentes alternativas (GitHub, Flatpak, Snap, AppImage),
+notificando siempre al usuario y pidiendo confirmación; respetar la preferencia
+de formato configurada y preguntar cuando haya varias variantes.
+
+### Agregado
+- `core/app_catalog.py`: catálogo de ~80 aplicaciones con metadatos de fuentes
+  (`repo`, `github`, `flatpak`, `snap`, `appimage`) y 24 categorías.
+- `core/alternative_sources.py`: `AlternativeSourceManager` con notificación,
+  confirmación obligatoria para fuentes no oficiales y selección de variante.
+- `core/sources_adapter.py`: proveedor de fuentes para la TUI (textual).
+- `SourcesScreen` en la TUI: instalar desde catálogo con elección de fuente.
+- Preferencia `preferred_install_method` en `config/default.yaml`.
+
+### Corregido
+- `distribution.py`: orden de detección (os-release primero) para devolver el ID
+  real (ubuntu/mint) en vez de `debian`; ramas de arch/fedora fuera de debian_version.
+- Tests de detección frágiles: se mockea `subprocess.run` para no depender de que
+  `lsb_release` exista en el host.
+- Adapters BSD: los comandos de solo lectura ya no anteponen sudo/doas.
+- Metadatos placeholder de `setup.py` y `__init__.py` reemplazados.
+- README y CHANGELOG alineados con el estado real de Alfa 2.
+
+---
+
+## [0.2.0-alpha.2] — 2026-11-18 — Fase Alfa 2 «Plano de entorno» (completada)
 
 Objetivo de la versión: menú **Sistema** con degradación elegante por capacidades, **A · Launch-or-focus**, **B · Acerca de** y **E · Visor de logs**; elevación con doas en BSD.
 

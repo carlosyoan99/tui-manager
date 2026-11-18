@@ -12,3 +12,7 @@ default_category: all
 show_notifications: true
 log_level: info
 default_package_manager: null  # forzar gestor (debian|arch|fedora|void|termux|freebsd|...)
+
+# Fuente preferida para instalar apps del catálogo:
+# auto | repo | github | flatpak | snap | appimage
+preferred_install_method: auto

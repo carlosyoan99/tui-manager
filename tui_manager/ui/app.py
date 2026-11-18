@@ -104,6 +104,8 @@ class TuiManagerApp(App):
     """Aplicación principal: empuja el menú principal al arrancar."""
 
     TITLE = 'TUI Manager'
+    CSS_PATH = 'app.tcss'
+    ENABLE_COMMAND_PALETTE = True
     BINDINGS = [
         ('q', 'quit', t('common.quit')),
         ('?', 'help', t('common.help')),
@@ -137,7 +139,8 @@ class TuiManagerApp(App):
 
     def action_help(self):
         from tui_manager.ui.screens import HelpScreen
-        self.push_screen(HelpScreen(self.services))
+        self.push_screen(HelpScreen(self.services,
+                                    context=type(self.screen).__name__))
 
     def subtitle(self):  # usado por textual si se define SUBTITLE dinámico
         return t('app.subtitle')

@@ -15,6 +15,8 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
+# Archivos empaquetados
+*.zip
 # TUI Manager en runtime
 *.log
 *.bak-tm

@@ -25,7 +25,8 @@ class DebianAdapter(PackageAdapter):
     CATEGORIES = _BASE_CATEGORIES
 
     def execute_command(self, command: List[str], sudo: bool = True) -> tuple:
-        if sudo and len(command) > 1 and (command[0], command[1]) in self._READONLY:
+        if sudo and ('--dry-run' in command or
+                     (len(command) > 1 and (command[0], command[1]) in self._READONLY)):
             sudo = False
         return super().execute_command(command, sudo=sudo)
 
@@ -191,3 +192,28 @@ class DebianAdapter(PackageAdapter):
         """Categoría desde el dict compartido (sin subprocesos por paquete)."""
         category = _shared_category(package_name)
         return f"[{category}]" if category != 'other' else ""
+
+    # --- Huérfanos (apt autoremove) ---
+
+    def get_orphans(self) -> List[Package]:
+        """Paquetes que apt autoremove eliminaría (simulación con --dry-run)."""
+        returncode, stdout, stderr = self.execute_command(
+            ['apt-get', 'autoremove', '--dry-run'])
+        if returncode != 0:
+            logger.error(f"Error al listar huérfanos: {stderr}")
+            return []
+        orphans = []
+        for line in stdout.split('\n'):
+            if line.startswith('Remv '):  # "Remv libfoo [1.2.3]"
+                parts = line.split()
+                if len(parts) > 1:
+                    orphans.append(Package(name=parts[1]))
+        return orphans
+
+    def clean_orphans(self, confirm: bool = True) -> bool:
+        returncode, stdout, stderr = self.execute_command(
+            ['apt-get', 'autoremove', '-y'])
+        if returncode != 0:
+            logger.error(f"Error al limpiar huérfanos: {stderr}")
+            return False
+        return True

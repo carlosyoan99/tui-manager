@@ -69,6 +69,14 @@ class PackageAdapter:
         """Debe implementar este método"""
         raise NotImplementedError
 
+    def get_orphans(self) -> List[Package]:
+        """Paquetes huérfanos (sin dependientes). Base: ninguno."""
+        return []
+
+    def clean_orphans(self, confirm: bool = True) -> bool:
+        """Elimina huérfanos. Base: no soportado."""
+        return False
+
     def execute_command(self, command: List[str], sudo: bool = True) -> tuple:
         """
         Ejecuta un comando del sistema

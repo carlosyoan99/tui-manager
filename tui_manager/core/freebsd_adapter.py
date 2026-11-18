@@ -42,7 +42,7 @@ class FreeBSDAdapter(PackageAdapter):
 
     def get_installed_packages(self) -> List[Package]:
         returncode, stdout, stderr = self.execute_command(
-            ['pkg', 'info', '-a'], sudo=self._needs_sudo()
+            ['pkg', 'info', '-a'], sudo=False
         )
         if returncode != 0:
             logger.error(f"Error al obtener paquetes: {stderr}")
@@ -67,7 +67,7 @@ class FreeBSDAdapter(PackageAdapter):
 
     def get_package_info(self, package_name: str) -> Package:
         returncode, stdout, stderr = self.execute_command(
-            ['pkg', 'info', package_name], sudo=self._needs_sudo()
+            ['pkg', 'info', package_name], sudo=False
         )
         if returncode != 0:
             raise PackageNotFoundError(f"Paquete '{package_name}' no encontrado")
@@ -113,7 +113,7 @@ class FreeBSDAdapter(PackageAdapter):
 
     def search_packages(self, query: str) -> List[Package]:
         returncode, stdout, stderr = self.execute_command(
-            ['pkg', 'search', query], sudo=self._needs_sudo()
+            ['pkg', 'search', query], sudo=False
         )
         if returncode != 0:
             logger.error(f"Error al buscar paquetes: {stderr}")
@@ -142,7 +142,7 @@ class FreeBSDAdapter(PackageAdapter):
     def get_updates_available(self) -> List[Package]:
         """Actualizables: pkg upgrade -n → líneas "	name: oldver -> newver"."""
         returncode, stdout, stderr = self.execute_command(
-            ['pkg', 'upgrade', '-n'], sudo=self._needs_sudo()
+            ['pkg', 'upgrade', '-n'], sudo=False
         )
         if returncode != 0:
             logger.error(f"Error al obtener actualizaciones: {stderr}")
@@ -176,3 +176,28 @@ class FreeBSDAdapter(PackageAdapter):
     def _confirm(message: str) -> bool:
         answer = input(f"\n{message} (S/n) > ").strip().lower()
         return answer in ('', 's', 'si', 'sí', 'y')
+
+    # --- Huérfanos (pkg autoremove) ---
+
+    def get_orphans(self) -> List[Package]:
+        returncode, stdout, stderr = self.execute_command(
+            ['pkg', 'autoremove', '-n'], sudo=self._needs_sudo())
+        if returncode != 0:
+            logger.error(f"Error al listar huérfanos: {stderr}")
+            return []
+        orphans = []
+        pattern = re.compile(r'^(\S+?)-(\d\S*)$')
+        for line in stdout.split('\n'):
+            match = pattern.match(line.strip())
+            if match:
+                orphans.append(Package(name=match.group(1),
+                                       version=match.group(2)))
+        return orphans
+
+    def clean_orphans(self, confirm: bool = True) -> bool:
+        returncode, _, stderr = self.execute_command(
+            ['pkg', 'autoremove', '-y'], sudo=self._needs_sudo())
+        if returncode != 0:
+            logger.error(f"Error al limpiar huérfanos: {stderr}")
+            return False
+        return True

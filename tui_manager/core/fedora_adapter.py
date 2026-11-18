@@ -198,3 +198,22 @@ class FedoraAdapter(PackageAdapter):
         """Categoría desde el dict compartido (sin subprocesos por paquete)."""
         category = _shared_category(package_name)
         return f"[{category}]" if category != 'other' else ""
+
+    # --- Huérfanos (dnf repoquery --unneeded / autoremove) ---
+
+    def get_orphans(self) -> List[Package]:
+        returncode, stdout, stderr = self.execute_command(
+            ['dnf', 'repoquery', '--unneeded', '--qf', '%{name}'])
+        if returncode != 0:
+            logger.error(f"Error al listar huérfanos: {stderr}")
+            return []
+        return [Package(name=line.strip())
+                for line in stdout.split('\n') if line.strip()]
+
+    def clean_orphans(self, confirm: bool = True) -> bool:
+        returncode, _, stderr = self.execute_command(
+            ['dnf', 'autoremove', '-y'])
+        if returncode != 0:
+            logger.error(f"Error al limpiar huérfanos: {stderr}")
+            return False
+        return True

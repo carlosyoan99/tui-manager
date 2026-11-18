@@ -19,7 +19,14 @@ logger = logging.getLogger(__name__)
 
 THEMES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))), 'config', 'themes')
-USER_THEMES_DIR = os.path.expanduser('~/.config/tui-manager/themes')
+
+
+def user_themes_dir() -> str:
+    """Directorio de packs del usuario (se recalcula: HOME puede cambiar)."""
+    return os.path.expanduser('~/.config/tui-manager/themes')
+
+
+USER_THEMES_DIR = user_themes_dir()  # compatibilidad; usar user_themes_dir()
 
 
 @dataclass
@@ -60,7 +67,7 @@ def list_packs() -> list:
     """Packs en orden: usuario primero, luego los incluidos en config/themes."""
     packs = []
     seen = set()
-    for base in (USER_THEMES_DIR, THEMES_DIR):
+    for base in (user_themes_dir(), THEMES_DIR):
         if os.path.isdir(base):
             for fname in sorted(os.listdir(base)):
                 if fname.endswith(('.yaml', '.yml')):
@@ -83,8 +90,8 @@ def get_pack(name: str) -> Optional[ThemePack]:
 def install_pack_from_url(url: str) -> Optional[ThemePack]:
     """Descarga un pack YAML y lo instala en el directorio de usuario."""
     try:
-        os.makedirs(USER_THEMES_DIR, exist_ok=True)
-        dest = os.path.join(USER_THEMES_DIR, os.path.basename(url.split('?')[0]))
+        os.makedirs(user_themes_dir(), exist_ok=True)
+        dest = os.path.join(user_themes_dir(), os.path.basename(url.split('?')[0]))
         if not dest.endswith(('.yaml', '.yml')):
             dest += '.yaml'
         urllib.request.urlretrieve(url, dest)
@@ -97,11 +104,11 @@ def install_pack_from_url(url: str) -> Optional[ThemePack]:
 
 def remove_pack(name: str) -> bool:
     """Solo remueve packs del directorio de usuario (los incluidos no)."""
-    for fname in os.listdir(USER_THEMES_DIR) if os.path.isdir(USER_THEMES_DIR) else []:
+    for fname in os.listdir(user_themes_dir()) if os.path.isdir(user_themes_dir()) else []:
         if fname.endswith(('.yaml', '.yml')):
-            pack = ThemePack.from_file(os.path.join(USER_THEMES_DIR, fname))
+            pack = ThemePack.from_file(os.path.join(user_themes_dir(), fname))
             if pack.name == name:
-                os.remove(os.path.join(USER_THEMES_DIR, fname))
+                os.remove(os.path.join(user_themes_dir(), fname))
                 return True
     return False
 

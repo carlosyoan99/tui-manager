@@ -2,6 +2,8 @@
 
 Plan por fases: alfas → betas → 1.0 estable. Cada fase tiene **criterios de salida verificables**; una fase no se cierra hasta cumplirlos todos.
 
+**Distribución de alcance (decisión 2026-11-18):** las **alfas** concentran el grueso de la funcionalidad (≈90 %): cada pantalla, acción y atajo nuevo entra en una alfa. Las **betas** cubren el 10 % restante y sobre todo **pulido, integración entre pantallas, coherencia visual/UX y corrección de errores** sobre lo ya implementado. La **1.0 estable** se declara solo cuando todo funciona, está validado en las plataformas objetivo y no quedan criterios pendientes.
+
 Leyenda de investigación previa (fuentes):
 - **[OM]** Comportamiento real de Omarchy, verificado en su repo (`bin/omarchy-*`, ~250 scripts) y manual.
 - **[ENV]** Detección e integración de DE/WM: variables de sesión (`XDG_CURRENT_DESKTOP`, `WAYLAND_DISPLAY`, `HYPRLAND_INSTANCE_SIGNATURE`, `SWAYSOCK`, `I3SOCK`, `DESKTOP_SESSION`) y CLIs (`hyprctl`, `swaymsg`, `i3-msg`, `gsettings`, `xfconf4`, `kdeglobals`).
@@ -11,21 +13,21 @@ Leyenda de investigación previa (fuentes):
 
 ---
 
-## Fase Alfa 1 — `0.1.x` «Núcleo usable» *(actual)*
+## Fase Alfa 1 — `0.1.x` «Núcleo usable» ✅ (completada)
 
 **Objetivo**: la TUI existe y hace bien tres cosas: paquetes, procesos, temas internos. Sin adaptadores de entorno todavía.
 
 Trabajo:
-- [ ] Implementar la capa UI con textual: `ScreenManager`, `MainMenuScreen`, `PackageManagerScreen`, `ProcessMonitorScreen`, `SettingsScreen`, `HelpScreen` (main.py ya los importa — hoy el arranque falla).
-- [ ] `config/default.yaml` + directorio `config/` real (hoy referenciado pero ausente).
-- [ ] Conectar `PackageManager` + adapters existentes a las pantallas.
-- [ ] Conectar `ProcessMonitor` (listar, filtrar, kill con confirmación, renice).
-- [ ] Temas internos de la TUI (dark/light/retro ya en `theme_manager.py`).
-- [ ] Detección de SO con aviso de "no soportado" ya existente en `main.py`.
-- [ ] Corregir `requirements.txt`: elegir **un** framework TUI (ver decisión pendiente), mover lo demás a extras opcionales.
-- [ ] `tui-manager --version`, `--doctor` (diagnóstico de entorno).
-- [ ] Soporte Termux/Android en Alfa 1 [TERMUX]: `TermuxAdapter` (apt del prefix), detección de Termux, sin elevación — el entorno actual de desarrollo sirve de banco de pruebas continuo.
-- [ ] Primeros tests: adapters con subproceso simulado (mocks), distribución, config.
+- [x] Implementar la capa UI con textual: `MainMenuScreen`, `PackagesScreen`, `ProcessesScreen`, `SettingsScreen`, `HelpScreen`, modales de confirmación.
+- [x] `config/default.yaml` + directorio `config/` real.
+- [x] Conectar `PackageManager` + adapters existentes a las pantallas.
+- [x] Conectar `ProcessMonitor` (listar, filtrar, kill con confirmación, renice).
+- [x] Temas internos de la TUI (dark/light/retro ya en `theme_manager.py`).
+- [x] Detección de SO con aviso de "no soportado".
+- [x] `requirements.txt`: un solo framework TUI (textual), resto en extras de desarrollo.
+- [x] `tui-manager --version`, `--doctor`.
+- [x] Soporte Termux/Android [TERMUX]: `TermuxAdapter`, detección, sin elevación.
+- [x] Tests: adapters con subproceso simulado, distribución, config, UI con `run_test()`.
 
 **Criterios de salida (todos):**
 1. `tui-manager` arranca sin excepciones en Debian/Ubuntu, Arch reales **y Termux/Android**.
@@ -36,22 +38,21 @@ Trabajo:
 
 ---
 
-## Fase Alfa 2 — `0.2.x` «Plano de entorno» 
+## Fase Alfa 2 — `0.2.x` «Plano de entorno» ✅ (completada)
 
 **Objetivo**: introducir el **EnvironmentAdapter** y el menú **Sistema**; soporte BSD.
 
 Trabajo:
-- [ ] `core/environment.py`: `EnvironmentDetector` (variables de sesión + CLIs) y jerarquía `EnvironmentAdapter` con **modelo de capacidades** (cada adaptador declara qué sabe hacer: `reload_config`, `set_gaps`, `set_wallpaper`, `toggle_bar`, `set_keybind`, `lock_screen`, `set_dark_mode`…).
-- [ ] `HyprlandAdapter` (hyprctl), `SwayAdapter` (swaymsg), `I3Adapter` (i3-msg), `BspwmAdapter` (bspc), `NullAdapter` (TTY/DE sin CLI) [ENV].
-- [ ] `KDEAdapter`/`GNOMEAdapter`/`XFCEAdapter` de superficie parcial (gsettings, kdeglobals, xfconf4) [ENV].
-- [ ] Menú **Sistema**: bloquear, salir, reiniciar, apagar, idle, notificaciones, brillo, perfiles de energía, zona horaria [OM].
-- [ ] Degradación elegante: entrada de menú deshabilitada + motivo cuando la capacidad no existe.
-- [ ] `FreeBSDAdapter` de paquetes (`pkg`) + soporte `doas` además de sudo [BSD].
-- [ ] Detección de NetBSD/OpenBSD (pkgsrc/pkg_add) como adaptador experimental.
-- [ ] Backups automáticos antes de modificar configs del WM (`archivo.bak-tm`).
-- [ ] **A · Launch-or-focus** [OM]: lanzar apps desde la TUI (dispatch exec del WM, `gtk-launch` o setsid como fallback); foco si ya corre (`wmctrl -a` cuando exista).
-- [ ] **B · Info del sistema**: pantalla «Acerca de» — SO, kernel, RAM, disco, batería (termux-battery-status en Termux), N paquetes [OM].
-- [ ] **E · Visor de logs**: ver el log de la app dentro de la TUI con refresco; complemento de `--doctor` [OM].
+- [x] `core/environment.py`: `EnvironmentDetector` y jerarquía `EnvironmentAdapter` con **modelo de capacidades**.
+- [x] `HyprlandAdapter`, `SwayAdapter`, `I3Adapter`, `BspwmAdapter`, `GenericDEAdapter`, `TTYAdapter`, `TermuxEnvironmentAdapter`.
+- [x] Menú **Sistema**: bloquear, salir, reiniciar, apagar, suspender, brillo, perfiles de energía, zona horaria, lanzar aplicación.
+- [x] Degradación elegante: entrada deshabilitada + motivo cuando la capacidad no existe.
+- [x] `FreeBSDAdapter` de paquetes (`pkg`) + soporte `doas` además de sudo.
+- [x] Detección de NetBSD/OpenBSD (pkgsrc) como adaptador experimental.
+- [x] Backups automáticos antes de modificar configs del WM (`archivo.bak-tm`).
+- [x] **A · Launch-or-focus** [OM]: foco si ya corre (hyprctl/swaymsg/i3-msg/bspc/wmctrl) y lanzamiento si no.
+- [x] **B · Info del sistema**: pantalla «Acerca de» — SO, kernel, RAM, disco, batería, N paquetes.
+- [x] **E · Visor de logs**: log dentro de la TUI con refresco.
 
 **Criterios de salida:**
 1. En Hyprland y en i3 reales: gaps y wallpaper conmutables desde el menú Sistema/Temas con backup previo.
@@ -62,33 +63,70 @@ Trabajo:
 
 ---
 
-## Fase Beta 1 — `0.3.x` «Temas Omarchy-like»
+## Fase Alfa 3 — `0.3.x` «Temas, Actualizar e interfaz» *(actual)*
 
-**Objetivo**: el momento insignia: elegir un tema y cambiar todo a la vez [OM][THEME].
+**Objetivo**: completar el grueso de las funciones restantes: el momento insignia de los temas, el menú Actualizar, los huérfanos y la capa de interfaz/atajos.
 
 Trabajo:
-- [ ] **Packs de temas** en YAML (estilo Omarchy: paleta + wallpaper + overrides por superficie) y directorio `config/themes/` con 5–8 packs (Catppuccin, Gruvbox, Tokyo Night, Nord, Everforest…) [OM].
-- [ ] `ThemeManager` ampliado: aplica la paleta por superficie según capacidades del entorno — terminal (alacritty/foot/kitty), GTK claro/oscuro, Qt, bar (waybar/polybar), wallpaper.
-- [ ] Wallpaper: siguiente/anterior/aleatorio del pack [OM].
-- [ ] Toggle claro/oscuro global.
-- [ ] Instalación/remoción de packs de temas desde el propio menú (carpeta local + URL).
+- [x] **Packs de temas** en YAML (paleta + wallpaper + overrides por superficie) y `config/themes/` con 5 packs [OM].
+- [x] Aplicación de paleta por superficie según capacidades: terminal (alacritty/foot/kitty), GTK claro/oscuro, wallpaper; backups `.bak-tm` previos [THEME].
+- [ ] Wallpaper: siguiente/anterior/aleatorio del pack desde la pantalla Temas [OM].
+- [ ] Toggle claro/oscuro global desde Temas.
+- [ ] Instalación/remoción de packs desde el menú (carpeta local + URL).
 - [ ] Menú **Actualizar** completo: disponibles, actualizar sistema, huérfanos, caché [OM].
-- [ ] Snapshots de configuración propia (backup/restore de `~/.config/tui-manager`).
-- [ ] **C · Stacks recomendados** [OM]: catálogo YAML portátil de apps por rol (editor, terminal, navegador, dev) que usa el plano de paquetes.
+- [ ] Huérfanos por distro en los adapters (apt autoremove, pacman -Qtdq, dnf autoremove, xbps-remove -o, pkg autoremove).
 - [ ] **D · Actualización de firmware (opcional)** [OM]: sección del menú Actualizar si `fwupdmgr` está presente.
-- [ ] **F · Snapshots extendidos** [OM]: backup/restore de configs del WM y bar (sobre `.bak-tm`); nunca snapshots de sistema (btrfs/zfs).
-- [ ] Paginación y caché de listas largas de paquetes; refresco asíncrono de procesos (no bloquea la UI).
+- [ ] Snapshots de configuración propia (backup/restore de `~/.config/tui-manager`).
+- [ ] **Interfaz y atajos**: hoja de estilos textual (layout, bordes, estados), paleta de comandos (`Ctrl+P`), números 1–9 en el menú, foco correcto (lista/tabla primero, `/` para buscar), `?` con ayuda contextual por pantalla, indicadores de carga.
+- [ ] Paginación y caché de listas largas; refresco asíncrono de procesos.
+- [ ] Cobertura de tests del core ≥ 75 % con simulación multi-SO.
 
 **Criterios de salida:**
-1. En Hyprland + terminal soportado: cambiar de tema aplica paleta a terminal + GTK + bar + wallpaper en una sola acción y es reversible.
-2. Los 5 packs incluidos aplican sin errores en al menos 2 WMs distintos.
-3. Actualizar sistema y limpiar huérfanos funcionan en Debian, Arch y FreeBSD.
+1. En Hyprland + terminal soportado: cambiar de tema aplica paleta a terminal + GTK + wallpaper en una sola acción, reversible con backup.
+2. Los 5 packs incluidos aplican sin errores en al menos 2 WMs distintos (simulado + real cuando haya hardware).
+3. Actualizar sistema y limpiar huérfanos funcionan en Debian, Arch y FreeBSD (simulado).
 4. Lista de 5 000+ paquetes navegable sin bloqueo perceptible (< 500 ms por refresco).
-5. Cobertura de tests del core ≥ 75 %.
+5. Toda pantalla responde a `?` con ayuda correcta y los atajos están documentados dentro de la TUI.
+6. Cobertura de tests del core ≥ 75 %.
 
 ---
 
-## Fase Beta 2 — `0.4.x` «Pulido y portabilidad»
+## Fase Alfa 4 — `0.4.x` «Catálogo e instantáneas»
+
+**Objetivo**: completar la funcionalidad restante del ~90 % (todo lo que no es pulido).
+
+Trabajo:
+- [ ] **C · Stacks recomendados** [OM]: catálogo YAML portátil de apps por rol (editor, terminal, navegador, dev) que usa el plano de paquetes e instala en lote.
+- [ ] **F · Snapshots extendidos** [OM]: backup/restore de configs del WM y bar (sobre `.bak-tm`); nunca snapshots de sistema (btrfs/zfs).
+- [ ] Webapps ligeras (**G**) si el catálogo lo requiere; documentar H/I como fase post-1.0.
+
+**Criterios de salida:**
+1. Instalar un stack completo (p. ej. «dev») desde el catálogo funciona en Debian y Arch simulados.
+2. Restaurar un snapshot devuelve exactamente los archivos previos y conserva el `.bak-tm`.
+3. Catálogo visible y legible en la TUI sin bloquear.
+
+---
+
+## Fase Beta 1 — `0.5.x` «Pulido e integración (10 % restante)»
+
+**Objetivo**: no añade funciones nuevas; pule, integra y corrige lo implementado en las alfas.
+
+Trabajo:
+- [ ] Corrección de errores detectados en pruebas reales (CachyOS/Void/Termux).
+- [ ] Integración entre pantallas: flujos coherentes (instalar → recargar lista → tema → wallpaper), estados vacíos y mensajes uniformes.
+- [ ] Consistencia visual: misma jerarquía, colores y espaciado en todas las pantallas; ajustes finos de theming por superficie (bar/GTK/Qt).
+- [ ] Atajos finales y accesibilidad (foco, navegación solo-teclado, modales).
+- [ ] Manejo de errores uniforme: toda acción fallida muestra mensaje accionable (nunca traceback).
+- [ ] Ayuda contextual definitiva por pantalla.
+
+**Criterios de salida:**
+1. Sesión de prueba guiada (checklist) sin errores ni estados confusos en Debian, Arch, FreeBSD y Termux.
+2. Toda acción destructiva pasa por confirmación y deja rastro en el log.
+3. Ninguna pantalla bloquea la UI más de 500 ms.
+
+---
+
+## Fase Beta 2 — `0.6.x` «Portabilidad y distribución»
 
 **Objetivo**: calidad de producto y alcance de plataformas completo.
 

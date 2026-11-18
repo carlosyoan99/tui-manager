@@ -30,11 +30,11 @@ def read_readme():
 
 setup(
     name='tui-manager',
-    version='0.2.0a2',
+    version='0.3.0a3',
     description='Panel de control portable para la terminal: paquetes, procesos, sistema y temas (Linux, BSD, Termux)',
-    author='Tu Nombre',
-    author_email='tu-email@ejemplo.com',
-    url='https://github.com/tu-usuario/TUI-Manager',
+    author='Carlos Yoan',
+    author_email='carlosyoan@local',
+    url='https://github.com/carlosyoan/TUI-Manager',
     license='MIT',
 
     packages=find_packages(exclude=['tests', 'docs', 'config', 'venv']),
@@ -63,7 +63,7 @@ setup(
         'Topic :: System :: Systems Administration',
     ],
 
-    keywords='tui terminal package manager process monitor linux',
+    keywords='tui terminal package manager process monitor linux bsd termux cross-platform',
 
     long_description=read_readme(),
     long_description_content_type='text/markdown',

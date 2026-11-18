@@ -106,21 +106,25 @@ TUI-Manager/
 ├── tui_manager/
 │   ├── main.py               # Punto de entrada
 │   ├── core/
-│   │   ├── distribution.py   # Detección de SO/distro
-│   │   ├── environment.py    # (planificado) detección DE/WM + capacidades
+│   │   ├── distribution.py   # Detección de SO/distro (Linux, BSD, Termux)
+│   │   ├── environment.py    # detección DE/WM + capacidades
 │   │   ├── package_manager.py + *_adapter.py  # plano de SO
+│   │   ├── categories.py · app_catalog.py     # categorías y apps recomendadas
+│   │   ├── alternative_sources.py · sources_adapter.py  # fuentes externas
 │   │   ├── process_monitor.py
-│   │   ├── theme_manager.py
+│   │   ├── theme_manager.py · theme_packs.py
+│   │   ├── sysinfo.py · system_control.py
 │   │   ├── config.py · event.py
-│   └── ui/                   # (planificado) pantallas y menús textual
+│   ├── i18n.py               # español / inglés
+│   └── ui/                   # pantallas y menús textual (app.py, screens.py)
 ├── config/                   # default.yaml y packs de temas
 ├── docs/                     # Documentación
-└── tests/                    # (planificado)
+└── tests/                    # suite simulada multi-SO + UI + CLI
 ```
 
 ## Estado
 
-**Alfa temprana (0.1.x)**. El núcleo (paquetes, procesos, temas, config, eventos) está implementado; la capa UI y los adaptadores de entorno están especificados en [`docs/ROADMAP.md`](docs/ROADMAP.md). Consultá el roadmap para las fases alfa → beta → estable y sus criterios de salida.
+**Alfa 2 (0.2.0-alpha.2)** — fase «Plano de entorno». La TUI con [textual](https://textual.textualize.io/) es funcional: paquetes, procesos, system, temas, actualizaciones, ajustes, ayuda, acerca de y logs, con degradación elegante por capacidades. Núcleo multi-SO (Linux, BSD, Termux) con 119 tests verdes. Ver [`CHANGELOG.md`](CHANGELOG.md) y [`docs/ROADMAP.md`](docs/ROADMAP.md) para el detalle de fases y criterios de salida.
 
 ## Licencia
 

@@ -1,23 +1,27 @@
 """
-Pantallas de TUI Manager (Alfa 1).
+Pantallas de TUI Manager (Alfa 3).
 
-- MainMenuScreen: menú con entradas habilitadas y deshabilitadas
-  (degradación elegante: Sistema → Alfa 2; Temas/Actualizar → Beta 1).
+- MainMenuScreen: menú principal con atajos 1–9 y todas las entradas activas.
 - PackagesScreen: DataTable de paquetes, instalar/remover/info/caché/buscar.
-- ProcessesScreen: monitor con refresco por intervalo, kill/renice/pausa.
+- ProcessesScreen: monitor con refresco por intervalo, kill/renice/pausa/orden.
+- ThemesScreen: packs de tema, wallpaper, claro/oscuro, instalar desde URL.
+- UpdatesScreen: actualizaciones, upgrade, caché, huérfanos, firmware.
 - SettingsScreen: tema interno, idioma, intervalo de refresco.
-- HelpScreen: atajos y sugerencia de --doctor.
-- ConfirmScreen: modal Sí/No reutilizable.
+- HelpScreen: atajos contextuales y sugerencia de --doctor.
+- ConfirmScreen/InputScreen: modales reutilizables.
 - ScreenManager: fachada de compatibilidad para main.py y tests.
 """
 
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 from typing import Callable
 
 from textual import on, work
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.screen import Screen, ModalScreen
 from textual.widgets import (
     DataTable,
@@ -30,10 +34,11 @@ from textual.widgets import (
     Select,
     Static,
 )
-from textual.containers import VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 
 from tui_manager.i18n import t
 from tui_manager.ui.app import Services
+from tui_manager.core.sources_adapter import SourcesAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -41,23 +46,27 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------- Menú ----
 
 class MainMenuScreen(Screen):
-    """Menú principal con degradación elegante por fase del roadmap."""
+    """Menú principal: todas las entradas activas + atajos numéricos."""
 
-    BINDINGS = [('escape', 'app.quit', t('common.quit'))]
-
-    # id de entrada → (fábrica de pantalla, motivo de deshabilitado)
-    # Alfa 2: Sistema, Acerca de y Logs habilitados; Temas/Actualizar → Beta 1.
     ENTRIES = (
-        ('packages', 'PackagesScreen', None),
-        ('processes', 'ProcessesScreen', None),
-        ('system', 'SystemScreen', None),
-        ('about', 'AboutScreen', None),
-        ('logs', 'LogsScreen', None),
-        ('settings', 'SettingsScreen', None),
-        ('help', 'HelpScreen', None),
-        ('themes', None, 'Beta 1'),
-        ('updates', None, 'Beta 1'),
+        ('packages', 'PackagesScreen'),
+        ('processes', 'ProcessesScreen'),
+        ('system', 'SystemScreen'),
+        ('themes', 'ThemesScreen'),
+        ('updates', 'UpdatesScreen'),
+        ('settings', 'SettingsScreen'),
+        ('help', 'HelpScreen'),
+        ('about', 'AboutScreen'),
+        ('logs', 'LogsScreen'),
+        ('apps', 'AppsScreen'),
     )
+
+    BINDINGS = [
+        Binding('escape', 'app.quit', t('common.quit')),
+    ] + [
+        Binding(str(index + 1), f'quick("{entry_id}")', show=False)
+        for index, (entry_id, _) in enumerate(ENTRIES)
+    ]
 
     def __init__(self, services: Services):
         super().__init__()
@@ -65,38 +74,44 @@ class MainMenuScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("app.title")}[/] — {t("menu.title")}')
+        yield Label(f'[b]{t("app.title")}[/] — {t("menu.title")}', classes='title')
         yield ListView(id='menu')
+        yield Static(t('menu.keys'), id='menu-status', classes='status', markup=False)
         yield Footer()
 
     def on_mount(self) -> None:
         menu = self.query_one('#menu', ListView)
         menu.clear()
-        for entry_id, _, disabled in self.ENTRIES:
+        for entry_id, _ in self.ENTRIES:
             label = t(f'menu.{entry_id}')
             desc = t(f'menu.{entry_id}.desc')
-            if disabled:
-                text = f'[dim]{label} — {desc} ({t("menu.coming_soon", phase=disabled)})[/]'
-                item = ListItem(Static(text), id=entry_id, classes='disabled')
-            else:
-                item = ListItem(Static(f'{label} — {desc}'), id=entry_id)
-            menu.append(item)
+            menu.append(ListItem(Static(f'{label} — {desc}'), id=entry_id))
+        if self.ENTRIES:
+            menu.index = 0
+        menu.focus()
 
     @on(ListView.Selected)
     def open_entry(self, event: ListView.Selected) -> None:
-        entry_id = event.item.id
-        if entry_id in ('themes', 'updates'):
-            self.notify(t('menu.coming_soon', phase=dict(
-                themes='Beta 1', updates='Beta 1')[entry_id]),
-                severity='information')
-            return
+        if event.item.id:
+            self._open(event.item.id)
+
+    def action_quick(self, entry_id: str) -> None:
+        """Atajo numérico 1–9 → abre la entrada correspondiente."""
+        self._open(entry_id)
+
+    def _open(self, entry_id: str) -> None:
         from tui_manager.ui import screens
-        screen_cls = getattr(screens, dict(
-            packages='PackagesScreen', processes='ProcessesScreen',
-            system='SystemScreen', about='AboutScreen',
-            logs='LogsScreen', settings='SettingsScreen',
-            help='HelpScreen')[entry_id])
-        self.app.push_screen(screen_cls(self.services))
+        screen_cls = getattr(screens, {
+            'packages': 'PackagesScreen', 'processes': 'ProcessesScreen',
+            'system': 'SystemScreen', 'themes': 'ThemesScreen',
+            'updates': 'UpdatesScreen', 'settings': 'SettingsScreen',
+            'help': 'HelpScreen', 'about': 'AboutScreen',
+            'logs': 'LogsScreen', 'apps': 'AppsScreen',
+        }[entry_id])
+        if screen_cls is HelpScreen:
+            self.app.push_screen(screen_cls(self.services, context='MainMenuScreen'))
+        else:
+            self.app.push_screen(screen_cls(self.services))
 
 
 # ------------------------------------------------------------ Paquetes ----
@@ -110,6 +125,7 @@ class PackagesScreen(Screen):
         ('u', 'info', t('common.details')),
         ('c', 'cache', t('packages.update_cache')),
         ('f', 'filter', t('common.search')),
+        Binding('/', 'filter', show=False),
         ('escape', 'back', t('common.back')),
     ]
 
@@ -120,10 +136,11 @@ class PackagesScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("packages.title")}[/] ({self.services.distribution})')
+        yield Label(f'[b]{t("packages.title")}[/] ({self.services.distribution})',
+                    classes='title')
         yield Input(placeholder=t('common.search'), id='search')
         yield DataTable(id='packages-table')
-        yield Static(t('packages.keys'), id='packages-status')
+        yield Static(t('packages.keys'), id='packages-status', classes='status', markup=False)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -131,6 +148,7 @@ class PackagesScreen(Screen):
         table.cursor_type = 'row'
         table.add_columns(t('common.name'), t('common.version'),
                           t('common.installed'), t('common.description'))
+        table.focus()
         self.load_installed()
 
     @work(thread=True, exclusive=True)
@@ -159,9 +177,12 @@ class PackagesScreen(Screen):
         query = event.value.strip()
         if query:
             self.load_search(query)
+            self.query_one('#packages-table', DataTable).focus()
 
     def action_filter(self) -> None:
-        self.query_one('#search', Input).focus()
+        search = self.query_one('#search', Input)
+        search.focus()
+        search.cursor_position = len(search.value)
 
     def _selected_package(self):
         table = self.query_one('#packages-table', DataTable)
@@ -243,6 +264,10 @@ class PackagesScreen(Screen):
                                       severity='error')
 
     def action_back(self) -> None:
+        """Esc: si el buscador tiene el foco, vuelve a la tabla; si no, atrás."""
+        if isinstance(self.focused, Input):
+            self.query_one('#packages-table', DataTable).focus()
+            return
         self.app.pop_screen()
 
 
@@ -256,7 +281,9 @@ class ProcessesScreen(Screen):
         ('K', 'kill9', t('processes.kill9')),
         ('n', 'renice', t('processes.renice')),
         ('p', 'pause', t('processes.paused')),
+        ('s', 'sort', t('processes.sort')),
         ('f', 'filter', t('common.filter')),
+        Binding('/', 'filter', show=False),
         ('escape', 'back', t('common.back')),
     ]
 
@@ -266,13 +293,14 @@ class ProcessesScreen(Screen):
         self._processes = []
         self._paused = False
         self._filter = ''
+        self._sort = 'cpu'
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("processes.title")}[/]')
+        yield Label(f'[b]{t("processes.title")}[/]', classes='title')
         yield Input(placeholder=t('common.filter'), id='proc-filter')
         yield DataTable(id='process-table')
-        yield Static(t('processes.keys'), id='process-status')
+        yield Static(t('processes.keys'), id='process-status', classes='status', markup=False)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -281,6 +309,7 @@ class ProcessesScreen(Screen):
         table.add_columns(t('processes.pid'), t('common.user'),
                           f'{t("common.cpu")} %', f'{t("common.memory")} %',
                           'NI', 'TIME', 'COMMAND')
+        table.focus()
         self._interval = self.set_interval(
             max(1, int(self.services.config.get('refresh_interval', 2))),
             self._tick)
@@ -297,23 +326,35 @@ class ProcessesScreen(Screen):
         self.app.call_from_thread(self._fill, processes)
 
     def _fill(self, processes) -> None:
-        self._processes = list(processes)
+        if self._sort == 'mem':
+            ordered = sorted(processes, key=lambda p: p.mem, reverse=True)
+        else:
+            ordered = sorted(processes, key=lambda p: p.cpu, reverse=True)
+        self._processes = list(ordered)
         table = self.query_one('#process-table', DataTable)
         table.clear()
-        for proc in self._processes:
+        for proc in ordered:
             table.add_row(str(proc.pid), proc.user, f'{proc.cpu:.1f}',
                           f'{proc.mem:.1f}', str(proc.nice), proc.time,
                           proc.command[:60])
+        sort_label = t(f'processes.sort_{self._sort}')
         self.query_one('#process-status', Static).update(
-            f'{len(self._processes)} — {t("processes.keys")}')
+            f'{len(self._processes)} · {sort_label} — {t("processes.keys")}')
 
     @on(Input.Submitted, '#proc-filter')
     def filter_submitted(self, event: Input.Submitted) -> None:
         self._filter = event.value.strip()
         self.refresh_table()
+        self.query_one('#process-table', DataTable).focus()
 
     def action_filter(self) -> None:
-        self.query_one('#proc-filter', Input).focus()
+        inp = self.query_one('#proc-filter', Input)
+        inp.focus()
+        inp.cursor_position = len(inp.value)
+
+    def action_sort(self) -> None:
+        self._sort = 'mem' if self._sort == 'cpu' else 'cpu'
+        self._fill(self._processes)
 
     def action_pause(self) -> None:
         self._paused = not self._paused
@@ -379,6 +420,9 @@ class ProcessesScreen(Screen):
         self.refresh_table()
 
     def action_back(self) -> None:
+        if isinstance(self.focused, Input):
+            self.query_one('#process-table', DataTable).focus()
+            return
         self.app.pop_screen()
 
 
@@ -395,7 +439,7 @@ class SettingsScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("settings.title")}[/]')
+        yield Label(f'[b]{t("settings.title")}[/]', classes='title')
         yield VerticalScroll(
             Select(
                 [(name, name) for name in self.services.theme_manager.THEMES],
@@ -413,9 +457,12 @@ class SettingsScreen(Screen):
             ),
             Input(value=str(self.services.config.get('refresh_interval', 2)),
                   id='input-interval', placeholder=t('settings.refresh_interval')),
-            Static(t('settings.termux_note'), id='settings-note'),
+            Static(t('settings.termux_note'), id='settings-note', classes='status', markup=False),
         )
         yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one('#select-theme', Select).focus()
 
     @on(Select.Changed, '#select-theme')
     def theme_changed(self, event: Select.Changed) -> None:
@@ -447,26 +494,406 @@ class SettingsScreen(Screen):
 # ---------------------------------------------------------------- Ayuda ----
 
 class HelpScreen(Screen):
-    """Atajos de teclado y diagnóstico."""
+    """Atajos de teclado (contextuales) y diagnóstico."""
 
     BINDINGS = [('escape', 'back', t('common.back'))]
+
+    # pantalla → claves i18n con sus atajos propios
+    CONTEXT_KEYS = {
+        'MainMenuScreen': ('menu.keys',),
+        'PackagesScreen': ('packages.keys',),
+        'ProcessesScreen': ('processes.keys',),
+        'ThemesScreen': ('themes.keys',),
+        'UpdatesScreen': ('updates.keys',),
+        'SystemScreen': ('system.keys',),
+    }
+
+    def __init__(self, services: Services, context: str = ''):
+        super().__init__()
+        self.services = services
+        self.context = context
+
+    def compose(self) -> ComposeResult:
+        lines = [t('help.keys_general'), t('help.keys_search')]
+        keys = self.CONTEXT_KEYS.get(self.context, ())
+        if keys:
+            lines.append('')
+            lines.append(t('help.context'))
+            lines += [t(key) for key in keys]
+        lines += ['', t('help.doctor_hint'), t('settings.termux_note')]
+        yield Header(show_clock=True)
+        yield Label(f'[b]{t("help.title")}[/]', classes='title')
+        with VerticalScroll():
+            yield Static('\n'.join(lines), id='help-text', markup=False)
+        yield Footer()
+
+    def action_back(self) -> None:
+        self.app.pop_screen()
+
+
+# ---------------------------------------------------------------- Temas ----
+
+class ThemesScreen(Screen):
+    """Packs de tema (aplicar, wallpaper, claro/oscuro, instalar URL)."""
+
+    BINDINGS = [
+        ('a', 'apply', t('themes.apply')),
+        ('w', 'wallpaper_next', t('themes.wallpaper_next')),
+        ('W', 'wallpaper_prev', t('themes.wallpaper_prev')),
+        ('d', 'dark', t('system.dark_mode')),
+        ('l', 'light', t('system.light_mode')),
+        ('i', 'install', t('themes.install_url')),
+        ('r', 'reload', t('common.refresh')),
+        ('escape', 'back', t('common.back')),
+    ]
+
+    WALLPAPER_EXTS = ('.jpg', '.jpeg', '.png', '.webp', '.bmp')
 
     def __init__(self, services: Services):
         super().__init__()
         self.services = services
+        self._packs = []
+        self._wall_index = {}
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        with VerticalScroll():
-            yield Static(
-                f'[b]{t("help.title")}[/]\n\n'
-                f'{t("help.keys_general")}\n\n'
-                f'{t("packages.keys")}\n'
-                f'{t("processes.keys")}\n\n'
-                f'{t("help.doctor_hint")}\n'
-                f'{t("settings.termux_note")}',
-                id='help-text')
+        yield Label(f'[b]{t("themes.title")}[/]', classes='title')
+        yield ListView(id='themes-list')
+        yield Static(t('themes.keys'), id='themes-status', classes='status', markup=False)
         yield Footer()
+
+    def on_mount(self) -> None:
+        self.action_reload()
+        self.query_one('#themes-list', ListView).focus()
+
+    def action_reload(self) -> None:
+        from tui_manager.core.theme_packs import list_packs
+        self._packs = list_packs()
+        menu = self.query_one('#themes-list', ListView)
+        menu.clear()
+        for pack in self._packs:
+            mode = 'dark' if pack.dark else 'light'
+            wallpaper = os.path.basename(pack.wallpaper) if pack.wallpaper else '—'
+            menu.append(ListItem(
+                Static(f'{pack.name}  [dim]({mode}, {wallpaper})[/]'),
+                id=pack.name))
+        if self._packs:
+            menu.index = 0
+        self.query_one('#themes-status', Static).update(
+            f'{t("themes.packs")}: {len(self._packs)} — {t("themes.keys")}')
+
+    def _selected_pack(self):
+        menu = self.query_one('#themes-list', ListView)
+        if self._packs and 0 <= menu.index < len(self._packs):
+            return self._packs[menu.index]
+        return None
+
+    # --- aplicar pack ---
+
+    def action_apply(self) -> None:
+        pack = self._selected_pack()
+        if not pack:
+            self.notify(t('themes.no_pack'), severity='warning')
+            return
+        self._apply_worker(pack)
+
+    @work(thread=True, exclusive=True)
+    def _apply_worker(self, pack) -> None:
+        from tui_manager.core.theme_packs import apply_pack
+        try:
+            summary = apply_pack(pack, self.services.environment)
+            applied = ', '.join(summary['applied']) or '—'
+            message = f'{t("themes.applied", name=pack.name)} · {applied}'
+            if summary['skipped']:
+                message += (f' · {t("themes.skipped")}: '
+                            + ', '.join(summary['skipped']))
+            self.app.call_from_thread(self.notify, message, timeout=8)
+            self.app.call_from_thread(self._mirror_internal_theme, pack)
+        except Exception as exc:
+            logger.exception('aplicar pack falló')
+            self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
+                                      severity='error')
+
+    def _mirror_internal_theme(self, pack) -> None:
+        """Refleja el modo del pack en el tema interno (sin persistir)."""
+        name = 'dark' if pack.dark else 'light'
+        if name in self.services.theme_manager.THEMES:
+            self.app.apply_tui_theme(name)
+
+    # --- wallpaper ---
+
+    def _wallpapers(self, pack):
+        wallpaper = pack.wallpaper
+        if not wallpaper:
+            # convención: config/themes/wallpapers/<pack>/ con imágenes
+            wallpaper = os.path.join(os.path.dirname(pack.source),
+                                     'wallpapers', pack.name)
+        if not os.path.isabs(wallpaper):
+            wallpaper = os.path.join(os.path.dirname(pack.source), wallpaper)
+        if os.path.isdir(wallpaper):
+            try:
+                names = sorted(os.listdir(wallpaper))
+            except OSError:
+                return []
+            return [os.path.join(wallpaper, n) for n in names
+                    if n.lower().endswith(self.WALLPAPER_EXTS)]
+        return [wallpaper]
+
+    def action_wallpaper_next(self) -> None:
+        self._cycle_wallpaper(1)
+
+    def action_wallpaper_prev(self) -> None:
+        self._cycle_wallpaper(-1)
+
+    def _cycle_wallpaper(self, step: int) -> None:
+        from tui_manager.core.environment import Capability
+        pack = self._selected_pack()
+        if not pack:
+            self.notify(t('themes.no_pack'), severity='warning')
+            return
+        env = self.services.environment
+        if not env or not env.supports(Capability.SET_WALLPAPER):
+            self.notify(t('themes.wallpaper_unsupported'), severity='warning')
+            return
+        files = self._wallpapers(pack)
+        if not files:
+            self.notify(t('themes.no_wallpaper'), severity='warning')
+            return
+        index = (self._wall_index.get(pack.name, -1) + step) % len(files)
+        self._wall_index[pack.name] = index
+        self._wallpaper_worker(files[index])
+
+    @work(thread=True, exclusive=False)
+    def _wallpaper_worker(self, path: str) -> None:
+        try:
+            ok = self.services.environment.set_wallpaper(path)
+            message = (t('themes.wallpaper_ok', name=os.path.basename(path))
+                       if ok else t('themes.wallpaper_failed'))
+            self.app.call_from_thread(self.notify, message,
+                                      severity='information' if ok else 'error')
+        except Exception as exc:
+            self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
+                                      severity='error')
+
+    # --- claro/oscuro ---
+
+    def action_dark(self) -> None:
+        self._set_mode(True)
+
+    def action_light(self) -> None:
+        self._set_mode(False)
+
+    def _set_mode(self, dark: bool) -> None:
+        from tui_manager.core.environment import Capability
+        env = self.services.environment
+        if env and env.supports(Capability.SET_DARK_MODE):
+            self._mode_worker(dark)
+            return
+        # Sin soporte del entorno: al menos el tema interno de la TUI.
+        name = 'dark' if dark else 'light'
+        if name in self.services.theme_manager.THEMES:
+            self.app.apply_tui_theme(name)
+        self.notify(t('themes.mode_tui_only', mode=name), severity='warning')
+
+    @work(thread=True, exclusive=False)
+    def _mode_worker(self, dark: bool) -> None:
+        try:
+            ok = self.services.environment.set_dark_mode(dark)
+            message = (t('themes.dark_ok') if dark else t('themes.light_ok')) \
+                if ok else t('themes.mode_failed')
+            self.app.call_from_thread(self.notify, message,
+                                      severity='information' if ok else 'error')
+        except Exception as exc:
+            self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
+                                      severity='error')
+
+    # --- instalar pack desde URL ---
+
+    def action_install(self) -> None:
+        self.app.push_screen(InputScreen(t('themes.install_url')), self._do_install)
+
+    def _do_install(self, url) -> None:
+        if not url:
+            return
+        self._install_worker(url)
+
+    @work(thread=True, exclusive=True)
+    def _install_worker(self, url: str) -> None:
+        from tui_manager.core.theme_packs import install_pack_from_url
+        try:
+            pack = install_pack_from_url(url)
+            if pack:
+                self.app.call_from_thread(self.notify,
+                                          t('themes.install_ok', name=pack.name))
+                self.app.call_from_thread(self.action_reload)
+            else:
+                self.app.call_from_thread(self.notify, t('themes.install_fail'),
+                                          severity='error')
+        except Exception as exc:
+            self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
+                                      severity='error')
+
+    def action_back(self) -> None:
+        self.app.pop_screen()
+
+
+# ---------------------------------------------------------- Actualizar ----
+
+class UpdatesScreen(Screen):
+    """Actualizaciones disponibles, upgrade, caché, huérfanos y firmware."""
+
+    BINDINGS = [
+        ('u', 'upgrade', t('packages.upgrade_system')),
+        ('c', 'cache', t('packages.update_cache')),
+        ('o', 'orphans', t('packages.orphans')),
+        ('F', 'firmware', t('updates.firmware')),
+        ('r', 'refresh', t('common.refresh')),
+        ('escape', 'back', t('common.back')),
+    ]
+
+    def __init__(self, services: Services):
+        super().__init__()
+        self.services = services
+        self._updates = []
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        yield Label(f'[b]{t("updates.title")}[/]', classes='title')
+        yield DataTable(id='updates-table')
+        yield Static(t('updates.checking'), id='updates-status', classes='status', markup=False)
+        yield Footer()
+
+    def on_mount(self) -> None:
+        table = self.query_one('#updates-table', DataTable)
+        table.cursor_type = 'row'
+        table.add_columns(t('common.name'), t('common.version'),
+                          t('common.description'))
+        table.focus()
+        self.check_updates()
+
+    @work(thread=True, exclusive=True)
+    def check_updates(self) -> None:
+        try:
+            updates = self.services.package_manager.get_updates_available()
+        except Exception as exc:
+            logger.exception('comprobar actualizaciones falló')
+            self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
+                                      severity='error')
+            updates = []
+        self.app.call_from_thread(self._fill, updates)
+
+    def _fill(self, updates) -> None:
+        self._updates = list(updates)
+        table = self.query_one('#updates-table', DataTable)
+        table.clear()
+        for pkg in self._updates:
+            table.add_row(pkg.name, pkg.version, pkg.description or '')
+        message = (t('updates.available', n=len(self._updates))
+                   if self._updates else t('updates.none'))
+        if shutil.which('fwupdmgr'):
+            message += f' · [F] {t("updates.firmware")}'
+        self.query_one('#updates-status', Static).update(
+            f'{message} — {t("updates.keys")}')
+
+    # --- upgrade ---
+
+    def action_upgrade(self) -> None:
+        self.app.push_screen(ConfirmScreen(t('updates.upgrade_confirm')),
+                             self._do_upgrade)
+
+    def _do_upgrade(self, confirmed) -> None:
+        if confirmed:
+            self._upgrade_worker()
+
+    @work(thread=True, exclusive=True)
+    def _upgrade_worker(self) -> None:
+        try:
+            ok = self.services.package_manager.upgrade_system()
+            message = t('updates.upgraded') if ok else t('packages.action_failed')
+            self.app.call_from_thread(self.notify, message,
+                                      severity='information' if ok else 'error')
+            self.app.call_from_thread(self.check_updates)
+        except Exception as exc:
+            logger.exception('upgrade falló')
+            self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
+                                      severity='error')
+
+    # --- caché ---
+
+    @work(thread=True, exclusive=False)
+    def action_cache(self) -> None:
+        try:
+            ok = self.services.package_manager.update_package_cache()
+            message = t('updates.cache_ok') if ok else t('packages.action_failed')
+            self.app.call_from_thread(self.notify, message,
+                                      severity='information' if ok else 'error')
+        except Exception as exc:
+            self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
+                                      severity='error')
+
+    # --- huérfanos ---
+
+    def action_orphans(self) -> None:
+        self._orphans_worker()
+
+    @work(thread=True, exclusive=False)
+    def _orphans_worker(self) -> None:
+        try:
+            orphans = self.services.package_manager.get_orphans()
+            self.app.call_from_thread(self._confirm_orphans, orphans)
+        except Exception as exc:
+            logger.exception('listar huérfanos falló')
+            self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
+                                      severity='error')
+
+    def _confirm_orphans(self, orphans) -> None:
+        if not orphans:
+            self.notify(t('updates.no_orphans'))
+            return
+        names = ', '.join(pkg.name for pkg in orphans[:8])
+        if len(orphans) > 8:
+            names += ', …'
+        self.app.push_screen(
+            ConfirmScreen(t('updates.orphans_confirm', n=len(orphans), names=names)),
+            self._do_clean_orphans)
+
+    def _do_clean_orphans(self, confirmed) -> None:
+        if confirmed:
+            self._clean_worker()
+
+    @work(thread=True, exclusive=False)
+    def _clean_worker(self) -> None:
+        try:
+            ok = self.services.package_manager.clean_orphans(confirm=False)
+            message = t('updates.orphans_ok') if ok else t('packages.action_failed')
+            self.app.call_from_thread(self.notify, message,
+                                      severity='information' if ok else 'error')
+        except Exception as exc:
+            logger.exception('limpiar huérfanos falló')
+            self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
+                                      severity='error')
+
+    # --- firmware (fwupd, opcional) ---
+
+    def action_firmware(self) -> None:
+        if not shutil.which('fwupdmgr'):
+            self.notify(t('updates.firmware_absent'), severity='warning')
+            return
+        self.notify(t('updates.firmware_checking'))
+        self._firmware_worker()
+
+    @work(thread=True, exclusive=False)
+    def _firmware_worker(self) -> None:
+        import subprocess
+        try:
+            proc = subprocess.run(['fwupdmgr', 'get-updates'],
+                                  capture_output=True, text=True, timeout=120)
+            output = (proc.stdout or proc.stderr or '').strip()
+            self.app.call_from_thread(self.notify, output[:600] or t('updates.none'),
+                                      timeout=12)
+        except Exception as exc:
+            self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
+                                      severity='error')
 
     def action_back(self) -> None:
         self.app.pop_screen()
@@ -503,15 +930,18 @@ class SystemScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("system.title")}[/] — {type(self.services.environment).__name__}')
+        yield Label(f'[b]{t("system.title")}[/] — {type(self.services.environment).__name__}',
+                    classes='title')
         yield ListView(id='system-menu')
+        yield Static(t('system.keys'), id='system-status', classes='status', markup=False)
         yield Footer()
 
     def on_mount(self) -> None:
         menu = self.query_one('#system-menu', ListView)
         menu.clear()
         self._available = self.services.system_control.availability()
-        for action_id, avail_key in self.ORDER:
+        first_enabled = None
+        for index, (action_id, avail_key) in enumerate(self.ORDER):
             label = t(f'system.{action_id}')
             reason = self._available.get(avail_key)
             if reason:
@@ -520,6 +950,11 @@ class SystemScreen(Screen):
                                      classes='disabled'))
             else:
                 menu.append(ListItem(Static(label), id=action_id))
+                if first_enabled is None:
+                    first_enabled = index
+        if first_enabled is not None:
+            menu.index = first_enabled
+        menu.focus()
 
     @on(ListView.Selected)
     def run_action(self, event: ListView.Selected) -> None:
@@ -607,9 +1042,9 @@ class AboutScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("about.title")}[/]')
+        yield Label(f'[b]{t("about.title")}[/]', classes='title')
         with VerticalScroll():
-            yield Static(t('common.loading'), id='about-text')
+            yield Static(t('common.loading'), id='about-text', markup=False)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -663,9 +1098,9 @@ class LogsScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("logs.title")}[/]')
+        yield Label(f'[b]{t("logs.title")}[/]', classes='title')
         with VerticalScroll():
-            yield Static('…', id='log-text')
+            yield Static('…', id='log-text', markup=False)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -706,8 +1141,9 @@ class ConfirmScreen(ModalScreen):
         self.message = message
 
     def compose(self) -> ComposeResult:
-        yield Label(self.message, id='confirm-message')
-        yield Footer()
+        with Vertical(classes='dialog'):
+            yield Label(self.message, id='confirm-message')
+            yield Footer()
 
     def action_yes(self) -> None:
         self.dismiss(True)
@@ -727,9 +1163,10 @@ class InputScreen(ModalScreen):
         self.value = value
 
     def compose(self) -> ComposeResult:
-        yield Label(self.prompt)
-        yield Input(value=self.value, id='modal-input')
-        yield Footer()
+        with Vertical(classes='dialog'):
+            yield Label(self.prompt)
+            yield Input(value=self.value, id='modal-input')
+            yield Footer()
 
     def on_mount(self) -> None:
         self.query_one('#modal-input', Input).focus()
@@ -740,6 +1177,179 @@ class InputScreen(ModalScreen):
     def action_cancel(self) -> None:
         self.dismiss(None)
 
+
+# -------------------------------------------------------- Catálogo / fuentes ----
+
+class SelectScreen(ModalScreen):
+    """Modal de selección; dismiss(índice) o dismiss(None) si cancela."""
+
+    BINDINGS = [('escape', 'cancel', t('common.cancel'))]
+
+    def __init__(self, title: str, options: list, hints: list = None):
+        super().__init__()
+        self.title = title
+        self.options = list(options)
+        self.hints = list(hints or [])
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes='dialog'):
+            yield Label(self.title)
+            yield ListView(id='source-options')
+            yield Footer()
+
+    def on_mount(self) -> None:
+        view = self.query_one('#source-options', ListView)
+        for i, opt in enumerate(self.options):
+            hint = self.hints[i] if i < len(self.hints) else ''
+            label = opt if not hint else f'{opt}  [{hint}]'
+            view.append(ListItem(Static(label), id=str(i)))
+        if self.options:
+            view.index = 0
+        view.focus()
+
+    @on(ListView.Selected)
+    def selected(self, event: ListView.Selected) -> None:
+        if event.item.id is not None:
+            self.dismiss(int(event.item.id))
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+class AppsScreen(Screen):
+    """Catálogo de apps recomendadas con instalación desde fuentes alternativas."""
+
+    BINDINGS = [
+        ('enter', 'install', t('common.install')),
+        ('c', 'category', t('apps.category')),
+        ('f', 'filter', t('common.search')),
+        Binding('/', 'filter', show=False),
+        ('escape', 'back', t('common.back')),
+    ]
+
+    def __init__(self, services: Services):
+        super().__init__()
+        self.services = services
+        self.adapter = SourcesAdapter(services.config)
+        self._apps = []
+        self._category = 'all'
+        self._query = ''
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        yield Label(f'[b]{t("apps.title")}[/]', classes='title')
+        yield Input(placeholder=t('common.search'), id='apps-search')
+        yield Select(
+            [(name, key) for key, name in self.adapter.categories().items()],
+            value='all', id='apps-category', prompt=t('apps.category'),
+        )
+        yield DataTable(id='apps-table')
+        yield Static(t('apps.category'), id='apps-status', classes='status', markup=False)
+        yield Footer()
+
+    def on_mount(self) -> None:
+        table = self.query_one('#apps-table', DataTable)
+        table.cursor_type = 'row'
+        table.add_columns(t('common.name'), t('apps.category'),
+                          t('apps.sources'), t('common.description'))
+        table.focus()
+        self._reload()
+
+    def _reload(self) -> None:
+        self._apps = self.adapter.list_apps(self._category, self._query)
+        table = self.query_one('#apps-table', DataTable)
+        table.clear()
+        for app in self._apps:
+            table.add_row(app.name, app.category,
+                          self.adapter.source_summary(app), app.description)
+        self.query_one('#apps-status', Static).update(
+            f'{len(self._apps)} apps — {t("apps.category")}: {self._category}'
+        )
+
+    @on(Input.Submitted, '#apps-search')
+    def search_submitted(self, event: Input.Submitted) -> None:
+        self._query = event.value.strip()
+        self._reload()
+        self.query_one('#apps-table', DataTable).focus()
+
+    @on(Select.Changed, '#apps-category')
+    def category_changed(self, event: Select.Changed) -> None:
+        if event.value is not Select.BLANK:
+            self._category = event.value
+            self._reload()
+
+    def action_filter(self) -> None:
+        search = self.query_one('#apps-search', Input)
+        search.focus()
+        search.cursor_position = len(search.value)
+
+    def action_category(self) -> None:
+        self.query_one('#apps-category', Select).focus()
+
+    def action_back(self) -> None:
+        self.app.pop_screen()
+
+    def _selected_app(self):
+        table = self.query_one('#apps-table', DataTable)
+        if 0 <= table.cursor_row < len(self._apps):
+            return self._apps[table.cursor_row]
+        return None
+
+    def action_install(self) -> None:
+        app = self._selected_app()
+        if not app:
+            return
+        sources = self.adapter.sources_for(app)
+        if not sources:
+            self.notify(t('apps.no_sources'), severity='warning')
+            return
+
+        if len(sources) == 1 and self.adapter.is_official(sources[0]):
+            self._confirm_and_install(app, sources[0])
+        else:
+            options = [self.adapter.describe_source(s) for s in sources]
+            hints = [t('apps.preferred') if s.type == self.adapter.preferred_format()
+                     else '' for s in sources]
+            self.app.push_screen(
+                SelectScreen(t('apps.source_choose'), options, hints),
+                lambda idx: self._source_chosen(app, sources, idx),
+            )
+
+    def _source_chosen(self, app, sources, idx) -> None:
+        if idx is None:
+            return
+        source = sources[idx]
+        if self.adapter.is_official(source):
+            self._confirm_and_install(app, source)
+        else:
+            self.app.push_screen(
+                ConfirmScreen(
+                    f'{t("apps.source_warning")}\n{app.name} → '
+                    f'{self.adapter.describe_source(source)}\n'
+                    f'{t("apps.source_confirm")}'
+                ),
+                lambda ok: self._do_install(app, source) if ok else None,
+            )
+
+    def _confirm_and_install(self, app, source) -> None:
+        self.app.push_screen(
+            ConfirmScreen(f'{t("packages.install_confirm")} {app.name}?'),
+            lambda ok: self._do_install(app, source) if ok else None,
+        )
+
+    @work(thread=True, exclusive=False)
+    def _do_install(self, app, source) -> None:
+        try:
+            ok = self.adapter.install(app, source)
+            msg = t('apps.install_ok', name=app.name,
+                    source=source.type) if ok else t('packages.action_failed')
+            self.app.call_from_thread(self.notify, msg,
+                                      severity='information' if ok else 'error')
+            self.app.call_from_thread(self._reload)
+        except Exception as exc:
+            logger.exception('instalación desde fuente falló')
+            self.app.call_from_thread(
+                self.notify, f'{t("common.error")}: {exc}', severity='error')
 
 # -------------------------------------------------------- Compatibilidad ----
 

@@ -19,7 +19,8 @@ class ArchAdapter(PackageAdapter):
 
     # pacman -Q*/-Ss son de lectura; -S/-R requieren root.
     _READONLY = {('pacman', '-Qi'), ('pacman', '-Si'),
-                 ('pacman', '-Ss'), ('pacman', '-Qu')}
+                 ('pacman', '-Ss'), ('pacman', '-Qu'),
+                 ('pacman', '-Qtdq')}
 
     CATEGORIES = _BASE_CATEGORIES
 
@@ -197,3 +198,23 @@ class ArchAdapter(PackageAdapter):
         """Categoría desde el dict compartido (sin subprocesos por paquete)."""
         category = _shared_category(package_name)
         return f"[{category}]" if category != 'other' else ""
+
+    # --- Huérfanos (pacman -Qtdq / -Rns) ---
+
+    def get_orphans(self) -> List[Package]:
+        returncode, stdout, stderr = self.execute_command(['pacman', '-Qtdq'])
+        if returncode != 0:  # rc 1 = no hay huérfanos
+            return []
+        return [Package(name=line.strip())
+                for line in stdout.split('\n') if line.strip()]
+
+    def clean_orphans(self, confirm: bool = True) -> bool:
+        orphans = self.get_orphans()
+        if not orphans:
+            return True
+        returncode, _, stderr = self.execute_command(
+            ['pacman', '-Rns', '--noconfirm'] + [p.name for p in orphans])
+        if returncode != 0:
+            logger.error(f"Error al limpiar huérfanos: {stderr}")
+            return False
+        return True

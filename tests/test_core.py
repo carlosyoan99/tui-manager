@@ -36,11 +36,20 @@ def test_detect_debian(monkeypatch):
     assert DistributionDetector.detect() == 'debian'
 
 
+def _no_lsb_release(monkeypatch):
+    """Fuerza a que lsb_release no exista, para tests sin depender del host."""
+    import subprocess
+    def fake_run(*args, **kwargs):
+        raise FileNotFoundError('lsb_release')
+    monkeypatch.setattr(subprocess, 'run', fake_run)
+
+
 def test_detect_freebsd_kernel_fallback(monkeypatch):
     monkeypatch.delenv('TERMUX_VERSION', raising=False)
     monkeypatch.setenv('PREFIX', '/usr')
     monkeypatch.setattr(os.path, 'exists', lambda p: False)
     monkeypatch.setattr(platform, 'system', lambda: 'FreeBSD')
+    _no_lsb_release(monkeypatch)
     assert DistributionDetector.detect() == 'freebsd'
 
 
@@ -49,6 +58,7 @@ def test_detect_failure(monkeypatch):
     monkeypatch.setenv('PREFIX', '/usr')
     monkeypatch.setattr(os.path, 'exists', lambda p: False)
     monkeypatch.setattr(platform, 'system', lambda: 'Plan9')
+    _no_lsb_release(monkeypatch)
     with pytest.raises(DistributionError):
         DistributionDetector.detect()
 
@@ -498,3 +508,33 @@ def test_pkgsrc_sudo_command_prefix(fake_runner, monkeypatch):
                         lambda t, *a, **k: '/usr/bin/sudo' if t == 'sudo' else None)
     fake_runner.expect(['sudo', 'pkgin', '-y', 'install', 'curl'], rc=0)
     assert PkgsrcAdapter().install_package('curl', confirm=False) is True
+
+
+def test_package_manager_orphans_passthrough():
+    """PackageManager delega huérfanos en el adapter y tolera errores."""
+    from tui_manager.core.package_adapter import Package
+    from tui_manager.core.package_manager import PackageManager
+
+    class FakeAdapter:
+        def get_orphans(self):
+            return [Package(name='libfoo', version='1.0')]
+
+        def clean_orphans(self, confirm=True):
+            assert confirm is False
+            return True
+
+    pm = PackageManager(distribution='arch')
+    pm.adapter = FakeAdapter()
+    assert [p.name for p in pm.get_orphans()] == ['libfoo']
+    assert pm.clean_orphans(confirm=False) is True
+
+    class BrokenAdapter:
+        def get_orphans(self):
+            raise RuntimeError('boom')
+
+        def clean_orphans(self, confirm=True):
+            raise RuntimeError('boom')
+
+    pm.adapter = BrokenAdapter()
+    assert pm.get_orphans() == []
+    assert pm.clean_orphans(confirm=False) is False

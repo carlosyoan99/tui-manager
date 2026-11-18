@@ -28,16 +28,17 @@ def split_pkgver(token: str):
 class VoidAdapter(PackageAdapter):
     """Gestor para Void Linux usando xbps"""
 
-    # xbps-query nunca necesita sudo; xbps-install/remove sí, salvo -n (dry-run).
+    # xbps-query nunca necesita sudo; install/remove sí, salvo dry-run (-n).
     _READONLY_PREFIX = 'xbps-query'
 
     CATEGORIES = _BASE_CATEGORIES
 
     def execute_command(self, command: List[str], sudo: bool = True) -> tuple:
-        if sudo and command and (
-                command[0] == self._READONLY_PREFIX
-                or command[:2] == ['xbps-install', '-n']):
-            sudo = False
+        if sudo and command:
+            if command[0] == self._READONLY_PREFIX:
+                sudo = False
+            elif command[0] in ('xbps-install', 'xbps-remove') and '-n' in command:
+                sudo = False
         return super().execute_command(command, sudo=sudo)
 
     def get_installed_packages(self) -> List[Package]:
@@ -205,3 +206,26 @@ class VoidAdapter(PackageAdapter):
         """Categoría desde el dict compartido (sin subprocesos por paquete)."""
         category = _shared_category(package_name)
         return f"[{category}]" if category != 'other' else ""
+
+    # --- Huérfanos (xbps-remove -o) ---
+
+    def get_orphans(self) -> List[Package]:
+        returncode, stdout, stderr = self.execute_command(
+            ['xbps-remove', '-o', '-n'])
+        if returncode != 0:
+            logger.error(f"Error al listar huérfanos: {stderr}")
+            return []
+        orphans = []
+        for line in stdout.split('\n'):
+            name, version = split_pkgver(line.strip())
+            if name:
+                orphans.append(Package(name=name, version=version or ''))
+        return orphans
+
+    def clean_orphans(self, confirm: bool = True) -> bool:
+        returncode, _, stderr = self.execute_command(
+            ['xbps-remove', '-o', '-y'])
+        if returncode != 0:
+            logger.error(f"Error al limpiar huérfanos: {stderr}")
+            return False
+        return True

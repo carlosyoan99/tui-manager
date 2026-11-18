@@ -172,11 +172,55 @@ CATEGORIES = {
         'multipass', 'waydroid', 'anbox', 'lxc', 'lxd', 'incus',
         'wine', 'bottles',
     ],
+    # --- Alfa 3: categorías adicionales (catálogo con fuentes) ---
+    'web': [
+        'firefox', 'firefox-esr', 'librewolf', 'waterfox', 'chromium',
+        'chromium-browser', 'google-chrome', 'brave-browser', 'vivaldi',
+        'opera', 'microsoft-edge', 'qutebrowser', 'epiphany', 'surf',
+        'torbrowser-launcher', 'newsboat', 'liferea',
+    ],
+    'audio': [
+        'spotify', 'spotify-player', 'audacious', 'rhythmbox', 'cmus',
+        'ncmpcpp', 'moc', 'deadbeef', 'strawberry', 'clementine',
+        'audacity', 'ardour', 'lmms', 'easyeffects', 'sox', 'pulseaudio',
+        'pipewire', 'wireplumber', 'playerctl',
+    ],
+    'video': [
+        'vlc', 'mpv', 'smplayer', 'celluloid', 'obs-studio', 'obs',
+        'kdenlive', 'shotcut', 'openshot', 'handbrake', 'mkvtoolnix',
+        'ffmpeg', 'yt-dlp', 'gstreamer',
+    ],
+    'productivity': [
+        'obsidian', 'joplin', 'logseq', 'notion-app', 'zotero',
+        'freeplane', 'xournalpp', 'standardnotes', 'trilium', 'appflowy',
+        'nextcloud-client', 'syncthing', 'rclone',
+    ],
+    'ai': [
+        'ollama', 'lmstudio', 'llama.cpp', 'localai', 'jan',
+        'open-webui', 'comfyui', 'invokeai',
+    ],
+    'fonts': [
+        'font-jetbrains-mono', 'font-fira-code', 'font-hack',
+        'ttf-jetbrains-mono', 'ttf-fira-code', 'ttf-hack',
+        'ttf-dejavu', 'ttf-liberation', 'noto-fonts', 'fontconfig',
+    ],
+    'themes': [
+        'nord-theme', 'dracula-theme', 'gruvbox-theme', 'catppuccin-theme',
+        'tokyo-night-theme', 'everforest-theme', 'arc-theme', 'orchis-theme',
+        'papirus-icon-theme', 'nordic-theme',
+    ],
+    'education': [
+        'anki', 'khan-academy', 'gcompris', 'tuxpaint', 'scratch',
+        'freemind', 'celestia', 'stellarium', 'kstars',
+    ],
     'other': [],
 }
 
 _ALIASES = {
     'utilities': ('files', 'system'),
+    'editors': ('development',),
+    'terminals': ('system',),
+    'browsers': ('web',),
 }
 
 

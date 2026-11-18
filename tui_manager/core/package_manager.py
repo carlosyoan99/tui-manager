@@ -265,3 +265,19 @@ class PackageManager:
         except Exception as e:
             logger.error(f"Error al obtener recomendaciones: {e}")
             return []
+
+    def get_orphans(self) -> List[Package]:
+        """Huérfanos según el adapter de la distribución."""
+        try:
+            return self.adapter.get_orphans()
+        except Exception as e:
+            logger.error(f"Error al obtener huérfanos: {e}")
+            return []
+
+    def clean_orphans(self, confirm: bool = True) -> bool:
+        """Limpia huérfanos según el adapter de la distribución."""
+        try:
+            return self.adapter.clean_orphans(confirm=confirm)
+        except Exception as e:
+            logger.error(f"Error al limpiar huérfanos: {e}")
+            return False

@@ -483,3 +483,82 @@ def test_hyprland_launch_or_focus_real_flow(fake_runner):
     fake_runner.expect(['hyprctl', '-j', 'clients'], stdout=HYPRLAND_CLIENTS)
     fake_runner.expect(['hyprctl', 'dispatch', 'exec', 'zathura manual.pdf'], rc=0)
     assert launch_or_focus(HyprlandAdapter(), 'zathura manual.pdf')['action'] == 'launched'
+
+
+# ---------------- Alfa 3: huérfanos por distro ----------------------------
+
+def test_debian_orphans(fake_runner):
+    fake_runner.expect(['apt-get', 'autoremove', '--dry-run'], stdout=(
+        "Reading package lists... Done\n"
+        "Building dependency tree... Done\n"
+        "The following packages will be REMOVED:\n"
+        "  libfoo libbar\n"
+        "0 upgraded, 0 newly installed, 2 to remove and 0 not upgraded.\n"
+        "Remv libfoo [1.2.3]\n"
+        "Remv libbar [4.5.6]\n"
+    ))
+    fake_runner.expect(['sudo', 'apt-get', 'autoremove', '-y'], rc=0,
+                        stdout="Removing libfoo...\n")
+    adapter = DebianAdapter()
+    orphans = adapter.get_orphans()
+    assert [p.name for p in orphans] == ['libfoo', 'libbar']
+    assert adapter.clean_orphans(confirm=False) is True
+    assert ('sudo', 'apt-get', 'autoremove', '-y') in fake_runner.calls
+
+
+def test_arch_orphans(fake_runner):
+    fake_runner.expect(['pacman', '-Qtdq'], stdout="libfoo\nlibbar\n")
+    fake_runner.expect(['sudo', 'pacman', '-Rns', '--noconfirm',
+                        'libfoo', 'libbar'], rc=0)
+    adapter = ArchAdapter()
+    assert [p.name for p in adapter.get_orphans()] == ['libfoo', 'libbar']
+    assert adapter.clean_orphans(confirm=False) is True
+
+
+def test_arch_orphans_none(fake_runner):
+    fake_runner.expect(['pacman', '-Qtdq'], rc=1)  # rc 1 = sin huérfanos
+    adapter = ArchAdapter()
+    assert adapter.get_orphans() == []
+    assert adapter.clean_orphans(confirm=False) is True  # nada que hacer
+
+
+def test_fedora_orphans(fake_runner):
+    fake_runner.expect(['dnf', 'repoquery', '--unneeded', '--qf', '%{name}'],
+                       stdout="libfoo\nlibbar\n")
+    fake_runner.expect(['sudo', 'dnf', 'autoremove', '-y'], rc=0)
+    adapter = FedoraAdapter()
+    assert [p.name for p in adapter.get_orphans()] == ['libfoo', 'libbar']
+    assert adapter.clean_orphans(confirm=False) is True
+
+
+def test_void_orphans(fake_runner):
+    fake_runner.expect(['xbps-remove', '-o', '-n'],
+                       stdout="libfoo-1.2_1\nlibbar-4.5_1\n")
+    fake_runner.expect(['sudo', 'xbps-remove', '-o', '-y'], rc=0)
+    adapter = VoidAdapter()
+    orphans = adapter.get_orphans()
+    assert [(p.name, p.version) for p in orphans] == [
+        ('libfoo', '1.2_1'), ('libbar', '4.5_1')]
+    assert adapter.clean_orphans(confirm=False) is True
+
+
+def test_freebsd_orphans(fake_runner, monkeypatch):
+    monkeypatch.setattr(FreeBSDAdapter, '_elevator', lambda self: 'sudo')
+    fake_runner.expect(['sudo', 'pkg', 'autoremove', '-n'], stdout=(
+        "Checking for extra packages...\n"
+        "libfoo-1.2.3\n"
+        "libbar-4.5\n"
+    ))
+    fake_runner.expect(['sudo', 'pkg', 'autoremove', '-y'], rc=0)
+    adapter = FreeBSDAdapter()
+    orphans = adapter.get_orphans()
+    assert [p.name for p in orphans] == ['libfoo', 'libbar']
+    assert adapter.clean_orphans(confirm=False) is True
+
+
+def test_base_adapter_orphans_noop():
+    """Un adapter sin soporte devuelve vacío y no falla."""
+    from tui_manager.core.package_adapter import PackageAdapter
+    base = PackageAdapter()
+    assert base.get_orphans() == []
+    assert base.clean_orphans() is False
