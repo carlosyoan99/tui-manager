@@ -296,6 +296,39 @@ Presiona `?` en cualquier pantalla para ver la ayuda específica de esa pantalla
 4. **Actualiza regularmente**: Mantén tus paquetes y repositorios al día
 5. **Usa atajos**: Los atajos de teclado hacen la navegación más rápida
 
+## Catálogo de apps y fuentes alternativas
+
+El menú **Catálogo de apps** (atajo `0`) muestra aplicaciones recomendadas con
+sus fuentes de instalación. El catálogo cuenta con **179 aplicaciones en 29 categorías**.
+Los AppImage solo se muestran si tienen una URL verificada (HTTP 200).
+
+### Fuentes disponibles
+Cada app declara una o más fuentes: `repo` (repositorio oficial), `github`,
+`flatpak`, `snap` y `appimage`. Solo se ofrecen las herramientas realmente
+instaladas en tu sistema.
+
+- Si hay **varias fuentes**, la TUI te pregunta cuál prefieres.
+- Si la fuente **no es oficial**, verás un aviso y debes confirmar antes de
+  continuar. Nunca se instala desde una fuente externa sin tu OK.
+- Un AppImage solo se ofrece si tiene una URL `http(s)` real declarada.
+
+### Formato preferido
+En **Ajustes** podés fijar `preferred_install_method` (en
+`~/.tui-manager/config.yaml`) con uno de estos valores:
+
+```yaml
+preferred_install_method: auto   # auto | repo | github | flatpak | snap | appimage
+```
+
+Con `auto` (por defecto) se pregunta cada vez. Con un valor concreto se usa ese
+formato cuando esté disponible, **pero igual se pide confirmación** si la
+fuente no es oficial.
+
+### Resultado de una instalación
+Toda instalación devuelve un resultado con `ok`, `source`, `returncode`,
+`actions` y `error`. Si falla, la TUI muestra el error. El rollback solo revierte
+directorios vacíos creados por el propio comando: **nunca borra archivos tuyos**.
+
 ## Siguiente Paso
 
 - Lee la [Documentación de la API](API.md) para detalles técnicos

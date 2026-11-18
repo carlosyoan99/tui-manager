@@ -93,6 +93,15 @@ Trabajo:
 
 ## Fase Alfa 4 — `0.4.x` «Catálogo e instantáneas»
 
+> **Nota de trazabilidad (2026-11-18):** el catálogo base de apps y el menú
+> «Catálogo de apps» ya se entregaron en **0.3.x (Alfa 3)** — ver
+> `core/app_catalog.py`, `core/alternative_sources.py` y `AppsScreen`. El
+> catálogo se extendió a **179 aplicaciones en 29 categorías**, con cuatro URLs
+> AppImage verificadas; esta extensión ya está cubierta en **0.3.x**. En esta
+> fase Alfa 4 quedan los stacks por rol (C) y las instantáneas (F). El criterio
+> 3 de salida de Alfa 4 ya está cubierto.
+
+
 **Objetivo**: completar la funcionalidad restante del ~90 % (todo lo que no es pulido).
 
 Trabajo:
@@ -103,7 +112,7 @@ Trabajo:
 **Criterios de salida:**
 1. Instalar un stack completo (p. ej. «dev») desde el catálogo funciona en Debian y Arch simulados.
 2. Restaurar un snapshot devuelve exactamente los archivos previos y conserva el `.bak-tm`.
-3. Catálogo visible y legible en la TUI sin bloquear.
+3. Catálogo visible y legible en la TUI sin bloquear. ✅ (entregado en 0.3.x)
 
 ---
 

@@ -51,6 +51,49 @@ def test_apps_with_alternative_sources():
     assert set(code.sources) >= {'repo', 'flatpak', 'snap', 'appimage'}
 
 
+def test_catalog_growth():
+    """El catálogo extendido supera los umbrales e incluye categorías nuevas."""
+    assert len(APPS) >= 150
+    assert len(CATEGORIES) >= 28
+    for category in ('backup', 'monitoring', 'finance', 'writing', 'accessibility'):
+        assert category in CATEGORIES
+
+
+def test_no_duplicate_app_names():
+    """El catálogo no debe contener nombres duplicados."""
+    from collections import Counter
+
+    names = [app.name for app in APPS]
+    duplicates = {name for name, count in Counter(names).items() if count > 1}
+    assert not duplicates, f"Nombres duplicados: {sorted(duplicates)}"
+
+
+def test_all_apps_have_valid_category_y_sources():
+    """Toda app pertenece a una categoría y declara fuentes válidas."""
+    allowed_sources = {'repo', 'github', 'flatpak', 'snap', 'appimage'}
+    for app in APPS:
+        assert app.category in CATEGORIES, app.name
+        assert app.sources, app.name
+        assert set(app.sources) <= allowed_sources, app.name
+
+
+def test_verified_appimage_urls():
+    """Las AppImage verificadas apuntan a un release de GitHub."""
+    for name in ('code', 'obsidian', 'joplin', 'keepassxc'):
+        app = get_app_by_name(name)
+        assert app is not None, name
+        url = app.identifiers['appimage']
+        assert url.startswith('https://github.com/'), name
+        assert '/releases/download/' in url, name
+
+
+def test_categories_labels_complete():
+    """CATEGORIES no tiene ids ni etiquetas vacíos."""
+    for key, label in CATEGORIES.items():
+        assert key.strip(), 'clave de categoría vacía'
+        assert label.strip(), f'etiqueta vacía para {key!r}'
+
+
 # ------------------------------------------------------------- fuentes ----
 
 def _manager(tools, prefs=None):

@@ -4,7 +4,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ---
 
-## [0.3.0-alpha.3] — En desarrollo — Fase Alfa 3 «Catálogo y fuentes»
+## [0.3.0-alpha.3] — 2026-11-18 — Fase Alfa 3 «Catálogo y fuentes» (completada)
 
 Objetivo: ampliar el catálogo de aplicaciones recomendadas con categorías ricas y
 permitir instalar desde fuentes alternativas (GitHub, Flatpak, Snap, AppImage),
@@ -14,6 +14,10 @@ de formato configurada y preguntar cuando haya varias variantes.
 ### Agregado
 - `core/app_catalog.py`: catálogo de ~80 aplicaciones con metadatos de fuentes
   (`repo`, `github`, `flatpak`, `snap`, `appimage`) y 24 categorías.
+- Extensión del catálogo a **179 aplicaciones en 29 categorías** (se añaden
+  `backup`, `monitoring`, `finance`, `writing` y `accessibility`). Cuatro URLs
+  AppImage verificadas con HTTP 200: `code`/VSCodium, Obsidian, Joplin y
+  KeePassXC; se retiran las fuentes AppImage sin URL verificada.
 - `core/alternative_sources.py`: `AlternativeSourceManager` con notificación,
   confirmación obligatoria para fuentes no oficiales y selección de variante.
 - `core/sources_adapter.py`: proveedor de fuentes para la TUI (textual).
@@ -33,12 +37,23 @@ de formato configurada y preguntar cuando haya varias variantes.
   de refresco de procesos), aclarando para qué sirve la última opción.
 
 ### Corregido
+- **Cierre de Alfa 3 (equipo de 3 agentes, Días 1–5):** los 3 huecos de
+  `alternative_sources.py` quedaron resueltos y verificados (`QA-REPORT.md`):
+  1. `build_sources()` hace 0 llamadas a `subprocess.run`; `repo` depende del
+     gestor real; AppImage sin URL http(s) se descarta (`validate_sources`).
+  2. `_execute_install()` con `capture_output=True`, `timeout=300` y log
+     estructurado (`app/source/returncode/duracion_ms/exit_code`).
+  3. `InstallResult` con rollback conservador: solo revierte directorios vacíos
+     creados por el propio comando; nunca borra archivos del usuario.
+- **Bug funcional CachyOS:** `pacman -Qi` localizado en español devolvía 0
+  paquetes; el parser ahora normaliza clases es/en → **1202 paquetes en vivo**.
 - `distribution.py`: orden de detección (os-release primero) para devolver el ID
   real (ubuntu/mint) en vez de `debian`; ramas de arch/fedora fuera de debian_version.
 - Tests de detección frágiles: se mockea `subprocess.run` para no depender de que
   `lsb_release` exista en el host.
 - Adapters BSD: los comandos de solo lectura ya no anteponen sudo/doas.
 - Metadatos placeholder de `setup.py` y `__init__.py` reemplazados.
+- Suite en **153 tests verdes**, veredicto QA **ACEPTAR**.
 - README y CHANGELOG alineados con el estado real de Alfa 2.
 
 ---
