@@ -22,9 +22,9 @@ y Documentador) más verificación final.
 - **167 tests verdes**, py_compile OK, smoke de TUI y `--doctor` correctos.
 - 146 claves i18n usadas, 0 faltantes; 0 `traceback.print`.
 
-### Decisión pendiente
-- La decisión 6 del roadmap asigna C/D/F a Beta 1, pero el trabajo de Beta 1
-  excluye funciones nuevas y C/F están en Alfa 4. Requiere definición antes de Beta 2.
+### Decisión resuelta (2026-11-18)
+- El desfase C/D/F quedó resuelto: se diferencian a **Beta 2** para respetar
+  que Beta 1 no añade funciones nuevas. Ver `docs/ROADMAP.md`.
 
 ---
 

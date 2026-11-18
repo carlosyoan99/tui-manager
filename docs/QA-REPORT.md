@@ -100,6 +100,6 @@ Día 7 la decisión sobre ampliar el equipo a 4–5 agentes para Beta 1.
 **Observaciones:**
 - 146 claves i18n usadas, 0 faltantes; 0 `traceback.print` en los cambios.
 - `--version` aún reportaba `0.3.0-alpha.3` al cierre; se corrige en este commit a `0.5.0-beta.1`.
-- **Decisión pendiente (no tomada por el agente):** la decisión 6 del roadmap asigna C/D/F a Beta 1, pero el trabajo de Beta 1 dice "no añade funciones nuevas" y C/F están en Alfa 4. Requiere tu criterio.
+- **Decisión resuelta (2026-11-18):** C/D/F se diferencian a Beta 2 en `docs/ROADMAP.md`, respetando que Beta 1 no añade funciones nuevas.
 
 > ## ✅ ACEPTAR (con la observación de versión corregida y la decisión C/D/F pendiente)

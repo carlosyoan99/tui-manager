@@ -105,8 +105,9 @@ Trabajo:
 **Objetivo**: completar la funcionalidad restante del ~90 % (todo lo que no es pulido).
 
 Trabajo:
-- [ ] **C · Stacks recomendados** [OM]: catálogo YAML portátil de apps por rol (editor, terminal, navegador, dev) que usa el plano de paquetes e instala en lote.
-- [ ] **F · Snapshots extendidos** [OM]: backup/restore de configs del WM y bar (sobre `.bak-tm`); nunca snapshots de sistema (btrfs/zfs).
+- [x] Catálogo base de apps (entregado en 0.3.x: 179 apps / 29 categorías con fuentes verificadas).
+- [ ] **C · Stacks recomendados** [OM] → **diferido a Beta 2** (resolución 2026-11-18).
+- [ ] **F · Snapshots extendidos** [OM] → **diferido a Beta 2** (resolución 2026-11-18).
 - [ ] Webapps ligeras (**G**) si el catálogo lo requiere; documentar H/I como fase post-1.0.
 
 **Criterios de salida:**
@@ -137,6 +138,11 @@ Trabajo:
 
 ## Fase Beta 2 — `0.6.x` «Portabilidad y distribución»
 
+> **Resolución del desfase C/D/F (2026-11-18):** la decisión 6 los asignaba a
+> Beta 1, pero Beta 1 se define como «no añade funciones nuevas» y C/F estaban
+> en Alfa 4. Se mueven a Beta 2. El catálogo base ya se entregó en Alfa 3;
+> lo que queda es la instalación por stacks (C), fwupd (D) y snapshots (F).
+
 **Objetivo**: calidad de producto y alcance de plataformas completo.
 
 Trabajo:
@@ -147,12 +153,16 @@ Trabajo:
 - [ ] i18n: español e inglés (esqueleto de traducciones).
 - [ ] Logging de auditoría de acciones destructivas (kill, remove, writes) [seguridad].
 - [ ] Docs al día con la realidad: USAGE con capturas asciinema, API, INSTALL por plataforma.
+- [ ] **C · Stacks recomendados** [OM] (diferido de Alfa 4): catálogo por rol que instala en lote.
+- [ ] **D · fwupd opcional** [OM] (diferido de la decisión 6): sección solo si `fwupdmgr` está presente.
+- [ ] **F · Snapshots extendidos** [OM] (diferido de Alfa 4): backup/restore de configs del WM y bar sobre `.bak-tm`; nunca snapshots de sistema.
 
 **Criterios de salida:**
 1. Instalable en Debian, Arch, Fedora y FreeBSD desde sus canales naturales, sin pasos manuales de dependencias.
 2. Toda pantalla responde `?` con ayuda correcta.
 3. Cero mensajes de error sin accionable en una sesión de prueba guiada (checklist en `tests/manual-checklist.md`).
 4. Auditoría registra todas las acciones destructivas con timestamp y destino.
+5. Stacks por rol instalan en lote y los snapshots restauran configs conservando `.bak-tm` (simulado en Debian y Arch).
 
 ---
 
@@ -200,7 +210,8 @@ Se declaran **todos** obligatorios (no es una lista de deseos, es una barrera):
 5. **i18n (es/en) desde Alfa 1.**
 6. **Funciones nuevas adoptadas de la investigación de Omarchy** (2026-11-18, A–I completas, en el roadmap):
    - **Alfa 2**: A · Launch-or-focus, B · Info del sistema «Acerca de», E · Visor de logs.
-   - **Beta 1**: C · Stacks recomendados, D · fwupd opcional, F · Snapshots extendidos (configs del WM).
+   - **Alfa 3**: catálogo base de apps y fuentes alternativas (179 apps / 29 categorías).
+   - **Beta 2**: C · Stacks recomendados, D · fwupd opcional, F · Snapshots extendidos (configs del WM). *(Corrección 2026-11-18: originalmente asignados a Beta 1, se difieren porque Beta 1 no añade funciones nuevas y C/F figuraban en Alfa 4.)*
    - **Post-1.0 planeado**: G · Webapps, H · Integración agéntica, I · Capacidades de hardware.
 7. **Soporte macOS y Windows planificado para la versión 2.0** (no en 1.0): macOS vía Homebrew y `defaults`/`osascript`; Windows vía winget/scoop/choco y `tasklist`/`taskkill`. Ver fase «2.0» en este roadmap.
 
