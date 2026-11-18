@@ -76,6 +76,36 @@ class EnvironmentAdapter:
     def launch_app(self, command: str) -> bool:
         raise NotImplementedError
 
+    def focus_window(self, title: str, cls: str = None) -> bool:
+        """Foco sobre una ventana por título/clase; False si no aplica."""
+        return False
+
+
+def launch_or_focus(env: EnvironmentAdapter, command: str) -> dict:
+    """A · Launch-or-focus [OM].
+
+    Si ya hay una ventana cuya clase/título contiene el primer token del
+    comando, se le da foco (capability LIST_WINDOWS + focus_window); si no,
+    se lanza (LAUNCH_APP o fallback universal del adapter).
+
+    Devuelve {'action': 'focused'|'launched'|'failed', ...}.
+    """
+    first = command.split()[0] if command.strip() else ''
+    if first and env.supports(Capability.LIST_WINDOWS):
+        try:
+            windows = env.list_windows() or []
+        except NotImplementedError:
+            windows = []
+        for win in windows:
+            hay = f"{win.get('class') or ''} {win.get('title') or ''}".lower()
+            if first.lower() in hay:
+                title = win.get('title') or first
+                if env.focus_window(title, cls=win.get('class')):
+                    return {'action': 'focused', 'window': win}
+    if env.launch_app(command):
+        return {'action': 'launched'}
+    return {'action': 'failed'}
+
 
 def _run(cmd: List[str], timeout: int = 10) -> tuple:
     try:
@@ -164,6 +194,10 @@ class HyprlandAdapter(EnvironmentAdapter):
         code, _, err = _run(['hyprctl', 'dispatch', 'exec', command])
         return code == 0
 
+    def focus_window(self, title: str, cls: str = None) -> bool:
+        target = f'class:{cls}' if cls else f'title:{title}'
+        return _run(['hyprctl', 'dispatch', 'focuswindow', target])[0] == 0
+
 
 class SwayAdapter(EnvironmentAdapter):
     name = 'sway'
@@ -223,6 +257,10 @@ class SwayAdapter(EnvironmentAdapter):
         code, _, err = _run(['swaymsg', 'exec', '--', command])
         return code == 0
 
+    def focus_window(self, title: str, cls: str = None) -> bool:
+        selector = (f'class="{cls}"' if cls else f'title="{title}"')
+        return _run(['swaymsg', f'[{selector}]', 'focus'])[0] == 0
+
 
 class I3Adapter(EnvironmentAdapter):
     name = 'i3'
@@ -264,6 +302,10 @@ class I3Adapter(EnvironmentAdapter):
     def launch_app(self, command: str) -> bool:
         return _run(['i3-msg', 'exec', command])[0] == 0
 
+    def focus_window(self, title: str, cls: str = None) -> bool:
+        selector = (f'class="{cls}"' if cls else f'title="{title}"')
+        return _run(['i3-msg', f'[{selector}]', 'focus'])[0] == 0
+
 
 class BspwmAdapter(EnvironmentAdapter):
     name = 'bspwm'
@@ -301,6 +343,10 @@ class BspwmAdapter(EnvironmentAdapter):
     def launch_app(self, command: str) -> bool:
         # bspwm no lanza procesos: fallback universal (setsid)
         return _run(['setsid', '-f', command])[0] == 0
+
+    def focus_window(self, title: str, cls: str = None) -> bool:
+        target = f'class={cls}' if cls else f'title={title}'
+        return _run(['bspc', 'node', '-f', target])[0] == 0
 
 
 class GenericDEAdapter(EnvironmentAdapter):
@@ -367,6 +413,12 @@ class GenericDEAdapter(EnvironmentAdapter):
     def launch_app(self, command: str) -> bool:
         # Fallback universal: setsid desacopla del ciclo de la TUI
         return _run(['setsid', '-f', command])[0] == 0
+
+    def focus_window(self, title: str, cls: str = None) -> bool:
+        # wmctrl -a busca subcadena en el título (X11)
+        if _has('wmctrl'):
+            return _run(['wmctrl', '-a', title])[0] == 0
+        return False
 
 
 class TTYAdapter(EnvironmentAdapter):

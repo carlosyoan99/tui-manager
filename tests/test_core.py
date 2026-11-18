@@ -382,3 +382,119 @@ def test_categories_variants_by_prefix():
 def test_adapter_categories_shared():
     assert 'firefox' in DebianAdapter.CATEGORIES['browsers']
     assert 'cachyos-packages' in ArchAdapter.CATEGORIES['system']
+
+
+# ---------------- Alfa 2: availability, sysinfo, doas BSD ------------------
+
+def test_system_availability_degrades(monkeypatch):
+    import shutil
+    import tui_manager.core.system_control as sc
+    from tui_manager.core.system_control import SystemControl
+    # entorno sin capacidades (TTY) y sin herramientas → todo deshabilitado salvo nada
+    env = type('E', (), {'supports': staticmethod(lambda c: False),
+                         'capabilities': lambda self: set()})()
+    monkeypatch.setattr(shutil, 'which', lambda t, *a, **k: None)
+    avail = SystemControl(environment=env).availability()
+    assert avail['lock'] == 'lock_screen (entorno)'
+    assert avail['reboot'] == 'systemctl/shutdown'
+    assert avail['launch'] == 'launch_app (entorno)'
+
+
+def test_system_availability_full(monkeypatch):
+    import shutil
+    from tui_manager.core.system_control import SystemControl
+    from tui_manager.core.environment import Capability
+    env = type('E', (), {'supports': staticmethod(
+        lambda c: c in (Capability.LOCK_SCREEN, Capability.LAUNCH_APP))})()
+    monkeypatch.setattr(shutil, 'which', lambda t, *a, **k: f'/usr/bin/{t}')
+    avail = SystemControl(environment=env).availability()
+    assert avail == {k: None for k in avail}
+
+
+def test_reboot_bsd_fallback(fake_runner, monkeypatch):
+    import shutil
+    import tui_manager.core.system_control as sc
+    from tui_manager.core.system_control import SystemControl
+    # sin systemctl, con shutdown (BSD) → shutdown -r now
+    monkeypatch.setattr(sc.shutil, 'which',
+                        lambda t, *a, **k: '/sbin/shutdown' if t == 'shutdown' else None)
+    fake_runner.expect(['shutdown', '-r', 'now'], rc=0)
+    ok, msg = SystemControl().reboot()
+    assert ok is True and msg == ''
+
+
+def test_sysinfo_collect(tmp_path, monkeypatch):
+    import platform
+    import tui_manager.core.sysinfo as si
+    from tui_manager.core.system_control import SystemControl
+
+    class FakePM:
+        def get_installed_packages(self):
+            return [1, 2, 3]
+
+    sc_bat = SystemControl()
+    monkeypatch.setattr(si.platform, 'system', lambda: 'FreeBSD')
+    monkeypatch.setattr(si.platform, 'release', lambda: '14.2')
+    monkeypatch.setattr(si.platform, 'machine', lambda: 'amd64')
+    import collections
+    Usage = collections.namedtuple('usage', 'total used free')
+    monkeypatch.setattr(si.shutil, 'disk_usage', lambda p: Usage(100, 40, 60))
+    monkeypatch.setattr(si._ram_total_mb, '__wrapped__', None, raising=False)
+    info = si.collect(distribution='freebsd',
+                      environment=type('E', (), {'name': 'tty'})(),
+                      system_control=None, package_manager=FakePM(),
+                      os_release='FreeBSD 14.2 (amd64)')
+    assert info['distro'] == 'freebsd'
+    assert info['environment'] == 'tty'
+    assert info['packages'] == 3
+    assert 'GB' in info['disk']
+
+
+def test_sysinfo_battery_and_ram(tmp_path, monkeypatch):
+    # RAM via /proc/meminfo simulado + batería via SystemControl fake
+    import tui_manager.core.sysinfo as si
+    (tmp_path / 'meminfo').write_text('MemTotal:        16384000 kB\n')
+    class Sc:
+        def battery_status(self):
+            return {'percent': '55', 'status': 'Charging'}
+    real_open = open
+    monkeypatch.setattr('builtins.open', lambda path, *a, **k:
+                        real_open(tmp_path / 'meminfo', *a, **k)
+                        if path == '/proc/meminfo'
+                        else real_open(path, *a, **k))
+    info = si.collect(system_control=Sc())
+    assert info['ram'] == '16000 MB'
+    assert info['battery']['percent'] == '55'
+
+
+def test_freebsd_doas_preferred(monkeypatch):
+    import os
+    import shutil
+    from tui_manager.core.freebsd_adapter import FreeBSDAdapter
+    monkeypatch.setattr(os, 'geteuid', lambda: 1000)
+    # solo doas disponible → antepone doas
+    monkeypatch.setattr(shutil, 'which',
+                        lambda t, *a, **k: '/usr/bin/doas' if t == 'doas' else None)
+    assert FreeBSDAdapter()._elevator() == 'doas'
+
+
+def test_freebsd_doas_command_prefix(fake_runner, monkeypatch):
+    import os
+    import shutil
+    from tui_manager.core.freebsd_adapter import FreeBSDAdapter
+    monkeypatch.setattr(os, 'geteuid', lambda: 1000)
+    monkeypatch.setattr(shutil, 'which',
+                        lambda t, *a, **k: '/usr/bin/doas' if t == 'doas' else None)
+    fake_runner.expect(['doas', 'pkg', 'install', '-y', 'curl'], rc=0)
+    assert FreeBSDAdapter().install_package('curl', confirm=False) is True
+
+
+def test_pkgsrc_sudo_command_prefix(fake_runner, monkeypatch):
+    import os
+    import shutil
+    from tui_manager.core.pkgsrc_adapter import PkgsrcAdapter
+    monkeypatch.setattr(os, 'geteuid', lambda: 1000)
+    monkeypatch.setattr(shutil, 'which',
+                        lambda t, *a, **k: '/usr/bin/sudo' if t == 'sudo' else None)
+    fake_runner.expect(['sudo', 'pkgin', '-y', 'install', 'curl'], rc=0)
+    assert PkgsrcAdapter().install_package('curl', confirm=False) is True

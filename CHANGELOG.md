@@ -4,6 +4,30 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ---
 
+## [0.2.0-alpha.2] — En desarrollo — Fase Alfa 2 «Plano de entorno»
+
+Objetivo de la versión: menú **Sistema** con degradación elegante por capacidades, **A · Launch-or-focus**, **B · Acerca de** y **E · Visor de logs**; elevación con doas en BSD.
+
+### Agregado
+- **Menú Sistema** (`SystemScreen`): bloquear, salir, reiniciar, apagar, suspender, brillo ±, perfiles de energía, zona horaria y lanzar aplicación — cada entrada se deshabilita con el motivo exacto (herramienta/capacidad que falta) vía `SystemControl.availability()`; reiniciar/apagar con confirmación; `SystemControl` con fallbacks BSD (`shutdown -r/-p now`, `zzz`).
+- **A · Launch-or-focus** [OM]: `launch_or_focus(env, comando)` en `core/environment.py` — enfoca si ya corre (`focus_window` por WM: hyprctl class:, swaymsg/i3-msg `[class=…] focus`, bspc `class=…`, wmctrl `-a`), si no lanza; flujo probado con salidas reales canned de `hyprctl -j clients` y árbol de sway.
+- **B · Acerca de** (`AboutScreen` + `core/sysinfo.py`): SO, kernel, RAM (/proc o sysctl), disco raíz, batería (Termux/sysfs), N paquetes, CPU, entorno.
+- **E · Visor de logs** (`LogsScreen`): cola del log (~/.tui-manager/logs/app.log) con refresco manual [r] y automático cada 2 s; mensaje vacío si no existe.
+- **Elevación BSD con doas**: `FreeBSDAdapter` y `PkgsrcAdapter` eligen sudo→doas→nada (`_elevator()`); comandos antepuestos correctamente.
+- Menú principal: entradas Sistema, Acerca de y Logs habilitadas; Temas y Actualizar siguen deshabilitadas (Beta 1).
+- i18n: `system.launch_prompt`, `logs.empty` (es/en).
+
+### Tests
+- `tests/test_adapters.py`: +5 (list_windows/focus de Hyprland/Sway/i3/bspwm/GenericDE con outputs reales canned; 5 caminos de `launch_or_focus`; flujo completo Hyprland).
+- `tests/test_core.py`: +7 (availability degradada y completa; reboot fallback BSD; sysinfo RAM/batería/disco/paquetes; doas preferido y antepuesto en FreeBSD; sudo antepuesto en pkgsrc).
+- `tests/test_ui.py`: +5 (gating del menú Sistema con capacidades fakes; flujo de lanzar con InputScreen; Acerca de llena datos; Logs con cola real y mensaje vacío).
+
+### Validación en vivo (Termux/Android)
+- `launch_or_focus` → `launched` (setsid real); sysinfo: Android 17, 8 núcleos, 5425 MB RAM, 338 paquetes, batería 69% vía termux-battery-status; Logs muestra el log real.
+- Menú Sistema en vivo: solo `launch` habilitado; el resto deshabilitado con motivo — degradación elegante correcta en Termux. (Bug corregido durante la validación: `Services.detect` no cableaba el entorno a `SystemControl`.)
+
+---
+
 ## [0.1.0-alpha.1] — 2026-11-18 — Fase Alfa 1 «Núcleo usable» (completada)
 
 Objetivo de la versión: la TUI arranca y hace bien tres cosas (paquetes, procesos, temas internos), sin adaptadores de entorno. **Cumplido:** suite 88/88 verde + smoke en vivo en Termux (338 paquetes reales renderizados, navegación completa).

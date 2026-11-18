@@ -88,13 +88,14 @@ class Services:
         config = config or Config()
         set_language(config.get('language', 'es'))
         distribution = distribution or DistributionDetector.detect()
+        environment = EnvironmentDetector.detect()
         return cls(
             config=config,
             package_manager=PackageManager(distribution=distribution),
             process_monitor=ProcessMonitor(),
             theme_manager=ThemeManager(config.get('theme', 'dark')),
-            system_control=SystemControl(),
-            environment=EnvironmentDetector.detect(),
+            system_control=SystemControl(environment=environment),
+            environment=environment,
             distribution=distribution,
         )
 

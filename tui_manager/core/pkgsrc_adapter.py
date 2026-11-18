@@ -18,8 +18,26 @@ logger = logging.getLogger(__name__)
 class PkgsrcAdapter(PackageAdapter):
     """Gestor de paquetes pkgin (pkgsrc) para NetBSD/OpenBSD."""
 
+    def _elevator(self):
+        """None (root/sin elevación), 'sudo' o 'doas' [BSD: criterio 4]."""
+        if os.geteuid() == 0:
+            return None
+        if shutil.which('sudo'):
+            return 'sudo'
+        if shutil.which('doas'):
+            return 'doas'
+        return None
+
     def _needs_sudo(self) -> bool:
-        return os.geteuid() != 0 and shutil.which('sudo') is not None
+        return self._elevator() is not None
+
+    def execute_command(self, command: List[str], sudo: bool = True) -> tuple:
+        if not sudo:
+            return super().execute_command(command, sudo=False)
+        elevator = self._elevator()
+        if elevator == 'doas':
+            return super().execute_command(['doas'] + command, sudo=False)
+        return super().execute_command(command, sudo=elevator == 'sudo')
 
     def get_installed_packages(self) -> List[Package]:
         # pkgin list: "pkg-1.2.3 has been installed"

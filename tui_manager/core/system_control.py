@@ -56,17 +56,23 @@ class SystemControl:
     def reboot(self):
         if self._which('systemctl'):
             return _run(['systemctl', 'reboot'])[0] == 0, ''
-        return False, 'systemctl no disponible'
+        if self._which('shutdown'):  # BSD y otros sin systemd
+            return _run(['shutdown', '-r', 'now'])[0] == 0, ''
+        return False, 'systemctl/shutdown no disponible'
 
     def shutdown(self):
         if self._which('systemctl'):
             return _run(['systemctl', 'poweroff'])[0] == 0, ''
-        return False, 'systemctl no disponible'
+        if self._which('shutdown'):  # BSD: shutdown -p apaga
+            return _run(['shutdown', '-p', 'now'])[0] == 0, ''
+        return False, 'systemctl/shutdown no disponible'
 
     def suspend(self):
         if self._which('systemctl'):
             return _run(['systemctl', 'suspend'])[0] == 0, ''
-        return False, 'systemctl no disponible'
+        if self._which('zzz'):  # FreeBSD suspend-to-RAM
+            return _run(['zzz'])[0] == 0, ''
+        return False, 'systemctl/zzz no disponible'
 
     # --- Brillo ---
     def brightness_step(self, direction: int):
@@ -140,3 +146,38 @@ class SystemControl:
         except Exception:
             pass
         return None
+
+    # --- Disponibilidad (para degradación elegante en el menú) ---
+    def availability(self) -> dict:
+        """id de acción → None si disponible, motivo si no lo está.
+
+        El motivo es el nombre de la herramienta/capacidad que falta.
+        """
+        from .environment import Capability
+
+        def env_cap(cap):
+            try:
+                return bool(self.environment and self.environment.supports(cap))
+            except Exception:
+                return False
+
+        return {
+            'lock': None if env_cap(Capability.LOCK_SCREEN)
+                    else 'lock_screen (entorno)',
+            'logout': None if self._which('loginctl')
+                      else 'loginctl',
+            'reboot': None if self._which('systemctl', 'shutdown')
+                      else 'systemctl/shutdown',
+            'shutdown': None if self._which('systemctl', 'shutdown')
+                        else 'systemctl/shutdown',
+            'suspend': None if self._which('systemctl', 'zzz')
+                       else 'systemctl/zzz',
+            'brightness': None if self._which('brightnessctl')
+                          else 'brightnessctl',
+            'power_profiles': None if self._which('powerprofilesctl')
+                              else 'powerprofilesctl',
+            'timezone': None if self._which('timedatectl')
+                        else 'timedatectl',
+            'launch': None if env_cap(Capability.LAUNCH_APP)
+                      else 'launch_app (entorno)',
+        }

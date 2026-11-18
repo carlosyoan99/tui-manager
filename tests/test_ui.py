@@ -77,18 +77,44 @@ class FakeProcessMonitor:
         return True
 
 
+def fake_env(caps_names):
+    from tui_manager.core.environment import Capability
+    caps = {getattr(Capability, n) for n in caps_names}
+    from tui_manager.core.environment import EnvironmentAdapter
+
+    class FakeEnv(EnvironmentAdapter):
+        name = 'fake-env'
+        def capabilities(self):
+            return caps
+        def lock_screen(self):
+            return True
+        def launch_app(self, command):
+            return True
+        def focus_window(self, title, cls=None):
+            return True
+        def list_windows(self):
+            return []
+    return FakeEnv()
+
+
 def make_services(tmp_path, monkeypatch):
     monkeypatch.setenv('HOME', str(tmp_path))
     monkeypatch.delenv('TERMUX_VERSION', raising=False)
+    # sin herramientas reales en el PATH del test (evita subprocesos vivos
+    # de termux-battery-status y compañía en Acerca de/Sistema)
+    import tui_manager.core.system_control as sc_module
+    monkeypatch.setattr(sc_module.shutil, 'which', lambda t, *a, **k: None)
     config = Config(config_file=str(tmp_path / 'config.yaml'))
     config.config['language'] = 'es'
+    from tui_manager.i18n import set_language
+    set_language('es')  # el estado de i18n es global: resetear por test
     return Services(
         config=config,
         package_manager=FakePackageManager(),
         process_monitor=FakeProcessMonitor(),
         theme_manager=ThemeManager('dark'),
         distribution='arch',
-        environment=type('FakeEnv', (), {'capabilities': lambda self: set()})(),
+        environment=fake_env([]),
     )
 
 
@@ -109,11 +135,12 @@ async def test_main_menu_entries_and_degradation(tmp_path, monkeypatch):
         await pilot.pause()
         from textual.widgets import ListItem
         items = app.screen.query(ListItem)
-        assert len(items) == 7
+        assert len(items) == 9
         disabled = {i.id for i in items if 'disabled' in i.classes}
-        assert disabled == {'system', 'themes', 'updates'}
+        assert disabled == {'themes', 'updates'}
         enabled = {i.id for i in items if 'disabled' not in i.classes}
-        assert enabled == {'packages', 'processes', 'settings', 'help'}
+        assert enabled == {'packages', 'processes', 'system', 'about',
+                           'logs', 'settings', 'help'}
 
 
 @pytest.mark.asyncio
@@ -142,8 +169,8 @@ async def test_disabled_entry_notifies(tmp_path, monkeypatch):
     async with app.run_test() as pilot:
         await pilot.pause()
         menu = app.screen.query_one('#menu')
-        # 5 downs desde cursor inicial -1 → índice 4 = 'system'
-        for _ in range(5):
+        # 8 downs desde cursor inicial -1 → índice 7 = 'themes'
+        for _ in range(8):
             menu.action_cursor_down()
         await pilot.pause()
         await pilot.press('enter')
@@ -256,9 +283,16 @@ async def test_settings_change_language_and_theme(tmp_path, monkeypatch):
     app = TuiManagerApp(services)
     async with app.run_test() as pilot:
         await pilot.pause()
-        await pilot.press('down', 'down', 'down', 'enter')  # Ajustes
+        menu = app.screen.query_one('#menu')
+        for _ in range(6):  # índice 5 = 'settings'
+            menu.action_cursor_down()
         await pilot.pause()
+        menu.action_select_cursor()
         from tui_manager.ui.screens import SettingsScreen
+        for _ in range(30):
+            await pilot.pause(0.02)
+            if isinstance(app.screen, SettingsScreen):
+                break
         assert isinstance(app.screen, SettingsScreen)
         lang_select = app.screen.query_one('#select-language')
         lang_select.value = 'en'
@@ -280,7 +314,7 @@ async def test_help_screen_content(tmp_path, monkeypatch):
     async with app.run_test() as pilot:
         await pilot.pause()
         menu = app.screen.query_one('#menu')
-        for _ in range(4):  # 4 downs desde -1 → índice 3 = 'help'
+        for _ in range(7):  # 7 downs desde -1 → índice 6 = 'help'
             menu.action_cursor_down()
         await pilot.pause()
         await pilot.press('enter')
@@ -297,3 +331,162 @@ def test_screen_manager_requires_services_for_run():
     """ScreenManager.run delega en TuiManagerApp (no se lanza en tests)."""
     sm = ScreenManager()
     assert sm.services is None
+
+
+# ---------------- Alfa 2: Sistema, Acerca de, Logs --------------------------
+
+def fake_env(caps_names):
+    from tui_manager.core.environment import Capability
+    caps = {getattr(Capability, n) for n in caps_names}
+    from tui_manager.core.environment import EnvironmentAdapter
+
+    class FakeEnv(EnvironmentAdapter):
+        name = 'fake-env'
+        def capabilities(self):
+            return caps
+        def lock_screen(self):
+            return True
+        def launch_app(self, command):
+            return True
+        def focus_window(self, title, cls=None):
+            return True
+        def list_windows(self):
+            return []
+    return FakeEnv()
+
+
+def fake_sc(monkeypatch, available_tools=()):
+    import shutil
+    import tui_manager.core.system_control as sc
+    monkeypatch.setattr(sc.shutil, 'which',
+                        lambda t, *a, **k: f'/usr/bin/{t}' if t in available_tools else None)
+    from tui_manager.core.system_control import SystemControl
+    return SystemControl()
+
+
+@pytest.mark.asyncio
+async def test_system_screen_gating(tmp_path, monkeypatch):
+    """Entradas habilitadas/deshabilitadas según disponibilidad real."""
+    services = make_services(tmp_path, monkeypatch)
+    services.system_control = fake_sc(monkeypatch, available_tools=())
+    services.environment = fake_env(['LOCK_SCREEN'])  # lock disponible, resto no
+    services.system_control.environment = services.environment
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        menu = app.screen.query_one('#menu')
+        for _ in range(3):  # 3 downs desde -1 → índice 2 = 'system'
+            menu.action_cursor_down()
+        await pilot.pause()
+        await pilot.press('enter')
+        await pilot.pause()
+        from tui_manager.ui.screens import SystemScreen
+        assert isinstance(app.screen, SystemScreen)
+        from textual.widgets import ListItem
+        items = app.screen.query(ListItem)
+        ids_disabled = {i.id for i in items if 'disabled' in i.classes}
+        # sin herramientas y sin LAUNCH_APP: solo lock queda habilitado
+        assert 'lock' not in ids_disabled
+        assert {'launch', 'logout', 'reboot', 'shutdown', 'suspend',
+                'brightness_up', 'power_profiles', 'timezone'} <= ids_disabled
+
+
+@pytest.mark.asyncio
+async def test_system_screen_launch_flow(tmp_path, monkeypatch):
+    services = make_services(tmp_path, monkeypatch)
+    services.system_control = fake_sc(monkeypatch, available_tools=())
+    services.environment = fake_env(['LAUNCH_APP'])
+    services.system_control.environment = services.environment
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        menu = app.screen.query_one('#menu')
+        for _ in range(3):
+            menu.action_cursor_down()
+        await pilot.pause()
+        await pilot.press('enter')
+        await pilot.pause()
+        from tui_manager.ui.screens import SystemScreen
+        screen = app.screen
+        assert isinstance(screen, SystemScreen)
+        # primera entrada del menú Sistema: 'launch' (1 down desde -1)
+        await pilot.press('down')
+        await pilot.pause()
+        await pilot.press('enter')
+        await pilot.pause()
+        from tui_manager.ui.screens import InputScreen
+        assert isinstance(app.screen, InputScreen)
+        inp = app.screen.query_one('#modal-input')
+        inp.value = 'foot editor'
+        await pilot.press('enter')
+        await _wait_workers(app, pilot)
+        # el env fake siempre lanza con éxito → toast system.done
+        from tui_manager.ui.screens import SystemScreen
+        assert isinstance(app.screen, SystemScreen)
+
+
+@pytest.mark.asyncio
+async def test_about_screen_fill(tmp_path, monkeypatch):
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        menu = app.screen.query_one('#menu')
+        for _ in range(4):  # índice 3 = 'about'
+            menu.action_cursor_down()
+        await pilot.pause()
+        await pilot.press('enter')
+        await _wait_workers(app, pilot)
+        from tui_manager.ui.screens import AboutScreen
+        assert isinstance(app.screen, AboutScreen)
+        text = str(app.screen.query_one('#about-text').render())
+        assert 'arch' in text          # distribución del fake
+        assert 'fake-env' in text      # entorno fake
+        assert '3' in text             # N paquetes del FakePackageManager
+
+
+@pytest.mark.asyncio
+async def test_logs_screen_shows_tail(tmp_path, monkeypatch):
+    services = make_services(tmp_path, monkeypatch)  # HOME → tmp_path
+    log_dir = tmp_path / '.tui-manager' / 'logs'
+    log_dir.mkdir(parents=True)
+    (log_dir / 'app.log').write_text('line1: inicio\nline2: paquetes\n')
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        menu = app.screen.query_one('#menu')
+        for _ in range(5):  # índice 4 = 'logs'
+            menu.action_cursor_down()
+        await pilot.pause()
+        await pilot.press('enter')
+        await pilot.pause()
+        from tui_manager.ui.screens import LogsScreen
+        assert isinstance(app.screen, LogsScreen)
+        for _ in range(30):
+            await pilot.pause(0.02)
+            text = str(app.screen.query_one('#log-text').render())
+            if 'line2: paquetes' in text:
+                break
+        text = str(app.screen.query_one('#log-text').render())
+        assert 'line2: paquetes' in text
+
+
+@pytest.mark.asyncio
+async def test_logs_screen_empty_message(tmp_path, monkeypatch):
+    services = make_services(tmp_path, monkeypatch)  # sin log creado
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        menu = app.screen.query_one('#menu')
+        for _ in range(5):
+            menu.action_cursor_down()
+        await pilot.pause()
+        await pilot.press('enter')
+        await pilot.pause()
+        for _ in range(30):
+            await pilot.pause(0.02)
+            text = str(app.screen.query_one('#log-text').render())
+            if 'No hay log todavía' in text:
+                break
+        text = str(app.screen.query_one('#log-text').render())
+        assert 'No hay log todavía' in text

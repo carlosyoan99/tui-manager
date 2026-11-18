@@ -373,3 +373,113 @@ def test_pkgsrc_updates(fake_runner):
     ))
     pkgs = PkgsrcAdapter().get_updates_available()
     assert len(pkgs) == 2 and pkgs[0].version == '5.2.37'
+
+
+# ---------------- Alfa 2: entorno real canned (hyprctl/swaymsg/i3-msg) ------
+
+HYPRLAND_CLIENTS = """[
+ {"pid": 1234, "class": "firefox", "title": "GitHub - mozilla"},
+ {"pid": 2222, "class": "alacritty", "title": "zsh"}
+]"""
+
+SWAY_TREE = """{
+ "type": "root", "name": "root", "nodes": [
+   {"type": "output", "name": "eDP-1", "nodes": [
+     {"type": "workspace", "name": "1", "nodes": [
+        {"type": "con", "name": "editor vim", "app_id": "alacritty",
+         "pid": 321, "window_properties": {"class": "Alacritty"}}
+     ]}
+   ]}
+ ],
+ "floating_nodes": []
+}"""
+
+
+def test_hyprland_list_windows_and_focus(fake_runner):
+    from tui_manager.core.environment import HyprlandAdapter
+    fake_runner.expect(['hyprctl', '-j', 'clients'], stdout=HYPRLAND_CLIENTS)
+    fake_runner.expect(['hyprctl', 'dispatch', 'focuswindow', 'class:firefox'], rc=0)
+    env = HyprlandAdapter()
+    windows = env.list_windows()
+    assert windows[0]['class'] == 'firefox'
+    assert env.focus_window('x', cls='firefox') is True
+
+
+def test_sway_list_windows_and_focus(fake_runner):
+    from tui_manager.core.environment import SwayAdapter
+    fake_runner.expect(['swaymsg', '-t', 'get_tree', '-r'], stdout=SWAY_TREE)
+    fake_runner.expect(['swaymsg', '[class="Alacritty"]', 'focus'], rc=0)
+    env = SwayAdapter()
+    windows = env.list_windows()
+    assert windows[0]['class'] == 'alacritty'
+    assert env.focus_window('editor', cls='Alacritty') is True
+
+
+def test_i3_bspwm_generic_focus(fake_runner, monkeypatch):
+    import shutil
+    from tui_manager.core.environment import I3Adapter, BspwmAdapter, GenericDEAdapter
+    fake_runner.expect(['i3-msg', '[title="Vim"]', 'focus'], rc=0)
+    assert I3Adapter().focus_window('Vim') is True
+    fake_runner.expect(['bspc', 'node', '-f', 'class=Foo'], rc=0)
+    assert BspwmAdapter().focus_window('x', cls='Foo') is True
+    # GenericDE necesita wmctrl en el PATH (mockeado)
+    monkeypatch.setattr(shutil, 'which',
+                        lambda t, *a, **k: '/usr/bin/wmctrl' if t == 'wmctrl' else None)
+    fake_runner.expect(['wmctrl', '-l'], rc=0)
+    fake_runner.expect(['wmctrl', '-a', 'Nota'], rc=0)
+    de = GenericDEAdapter('xfce')
+    assert de.list_windows() == []  # salida vacía: lista vacía
+    assert de.focus_window('Nota') is True
+
+
+def test_launch_or_focus_paths(fake_runner):
+    from tui_manager.core.environment import launch_or_focus, Capability
+
+    class Env:
+        name = 'fake'
+        def __init__(self, windows, focus_ok=True, launch_ok=True):
+            self.windows = windows
+            self.focus_ok = focus_ok
+            self.launch_ok = launch_ok
+        def capabilities(self):
+            caps = {Capability.LAUNCH_APP}
+            if self.windows is not None:
+                caps.add(Capability.LIST_WINDOWS)
+            return caps
+        def supports(self, cap):
+            return cap in self.capabilities()
+        def list_windows(self):
+            return self.windows
+        def focus_window(self, title, cls=None):
+            return self.focus_ok
+        def launch_app(self, command):
+            return self.launch_ok
+
+    # ya corre → focused
+    res = launch_or_focus(Env([{'pid': 1, 'class': 'firefox', 'title': 'X'}]), 'firefox')
+    assert res['action'] == 'focused'
+    # no corre → launched
+    res = launch_or_focus(Env([{'pid': 1, 'class': 'other', 'title': 'X'}]), 'firefox')
+    assert res['action'] == 'launched'
+    # sin LIST_WINDOWS → launched directo
+    res = launch_or_focus(Env(None), 'firefox')
+    assert res['action'] == 'launched'
+    # focus falla → reintenta como launch
+    res = launch_or_focus(Env([{'pid': 1, 'class': 'firefox', 'title': 'X'}],
+                              focus_ok=False), 'firefox')
+    assert res['action'] == 'launched'
+    # nada funciona → failed
+    res = launch_or_focus(Env([], launch_ok=False), 'firefox')
+    assert res['action'] == 'failed'
+
+
+def test_hyprland_launch_or_focus_real_flow(fake_runner):
+    """Flujo completo A con salidas reales canned de hyprctl."""
+    from tui_manager.core.environment import HyprlandAdapter, launch_or_focus
+    # firefox ya corre → focus; 'zathura' no → exec
+    fake_runner.expect(['hyprctl', '-j', 'clients'], stdout=HYPRLAND_CLIENTS)
+    fake_runner.expect(['hyprctl', 'dispatch', 'focuswindow', 'class:firefox'], rc=0)
+    assert launch_or_focus(HyprlandAdapter(), 'firefox')['action'] == 'focused'
+    fake_runner.expect(['hyprctl', '-j', 'clients'], stdout=HYPRLAND_CLIENTS)
+    fake_runner.expect(['hyprctl', 'dispatch', 'exec', 'zathura manual.pdf'], rc=0)
+    assert launch_or_focus(HyprlandAdapter(), 'zathura manual.pdf')['action'] == 'launched'

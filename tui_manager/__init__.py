@@ -2,7 +2,7 @@
 TUI Manager - Gestor de Paquetes y Procesos TUI para Linux
 """
 
-__version__ = '0.1.0-alpha.1'
+__version__ = '0.2.0-alpha.2'
 __author__ = 'Tu Nombre'
 __license__ = 'MIT'
 __description__ = 'Gestor de paquetes y monitoreo de procesos TUI para Linux'

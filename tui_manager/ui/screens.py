@@ -46,12 +46,15 @@ class MainMenuScreen(Screen):
     BINDINGS = [('escape', 'app.quit', t('common.quit'))]
 
     # id de entrada → (fábrica de pantalla, motivo de deshabilitado)
+    # Alfa 2: Sistema, Acerca de y Logs habilitados; Temas/Actualizar → Beta 1.
     ENTRIES = (
         ('packages', 'PackagesScreen', None),
         ('processes', 'ProcessesScreen', None),
+        ('system', 'SystemScreen', None),
+        ('about', 'AboutScreen', None),
+        ('logs', 'LogsScreen', None),
         ('settings', 'SettingsScreen', None),
         ('help', 'HelpScreen', None),
-        ('system', None, 'Alfa 2'),
         ('themes', None, 'Beta 1'),
         ('updates', None, 'Beta 1'),
     )
@@ -82,15 +85,17 @@ class MainMenuScreen(Screen):
     @on(ListView.Selected)
     def open_entry(self, event: ListView.Selected) -> None:
         entry_id = event.item.id
-        if entry_id in ('system', 'themes', 'updates'):
+        if entry_id in ('themes', 'updates'):
             self.notify(t('menu.coming_soon', phase=dict(
-                system='Alfa 2', themes='Beta 1', updates='Beta 1')[entry_id]),
+                themes='Beta 1', updates='Beta 1')[entry_id]),
                 severity='information')
             return
         from tui_manager.ui import screens
         screen_cls = getattr(screens, dict(
             packages='PackagesScreen', processes='ProcessesScreen',
-            settings='SettingsScreen', help='HelpScreen')[entry_id])
+            system='SystemScreen', about='AboutScreen',
+            logs='LogsScreen', settings='SettingsScreen',
+            help='HelpScreen')[entry_id])
         self.app.push_screen(screen_cls(self.services))
 
 
@@ -462,6 +467,227 @@ class HelpScreen(Screen):
                 f'{t("settings.termux_note")}',
                 id='help-text')
         yield Footer()
+
+    def action_back(self) -> None:
+        self.app.pop_screen()
+
+
+# -------------------------------------------------------------- Sistema ----
+
+class SystemScreen(Screen):
+    """Menú Sistema: acciones con degradación elegante por disponibilidad.
+
+    Cada entrada se deshabilita con el motivo (herramienta/capacidad que
+    falta) según `SystemControl.availability()` + capacidades del entorno.
+    """
+
+    BINDINGS = [('escape', 'back', t('common.back'))]
+
+    # id → clave de disponibilidad (None: acción siempre disponible)
+    ORDER = (
+        ('launch', 'launch'),
+        ('lock', 'lock'),
+        ('logout', 'logout'),
+        ('reboot', 'reboot'),
+        ('shutdown', 'shutdown'),
+        ('suspend', 'suspend'),
+        ('brightness_up', 'brightness'),
+        ('brightness_down', 'brightness'),
+        ('power_profiles', 'power_profiles'),
+        ('timezone', 'timezone'),
+    )
+
+    def __init__(self, services: Services):
+        super().__init__()
+        self.services = services
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        yield Label(f'[b]{t("system.title")}[/] — {type(self.services.environment).__name__}')
+        yield ListView(id='system-menu')
+        yield Footer()
+
+    def on_mount(self) -> None:
+        menu = self.query_one('#system-menu', ListView)
+        menu.clear()
+        self._available = self.services.system_control.availability()
+        for action_id, avail_key in self.ORDER:
+            label = t(f'system.{action_id}')
+            reason = self._available.get(avail_key)
+            if reason:
+                text = f'[dim]{label} ({t("system.not_supported")}: {reason})[/]'
+                menu.append(ListItem(Static(text), id=action_id,
+                                     classes='disabled'))
+            else:
+                menu.append(ListItem(Static(label), id=action_id))
+
+    @on(ListView.Selected)
+    def run_action(self, event: ListView.Selected) -> None:
+        action = event.item.id
+        if event.item.has_class('disabled'):
+            return
+        if action == 'launch':
+            self.app.push_screen(InputScreen(t('system.launch_prompt')),
+                                 self._do_launch)
+        elif action == 'reboot':
+            self.app.push_screen(ConfirmScreen(t('system.reboot_confirm')),
+                                 lambda ok: self._run_action('reboot') if ok else None)
+        elif action == 'shutdown':
+            self.app.push_screen(ConfirmScreen(t('system.shutdown_confirm')),
+                                 lambda ok: self._run_action('shutdown') if ok else None)
+        else:
+            self._run_action(action)
+
+    def _do_launch(self, command) -> None:
+        if not command or not command.strip():
+            return
+        self._launch_worker(command.strip())
+
+    @work(thread=True, exclusive=False)
+    def _launch_worker(self, command: str) -> None:
+        from tui_manager.core.environment import launch_or_focus
+        try:
+            result = launch_or_focus(self.services.environment, command)
+            key = {'launched': 'system.done', 'focused': 'system.done',
+                   'failed': 'system.failed'}[result['action']]
+            self.app.call_from_thread(self.notify, t(key),
+                                      severity='information' if
+                                      result['action'] != 'failed' else 'error')
+        except Exception as exc:
+            self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
+                                      severity='error')
+
+    @work(thread=True, exclusive=False)
+    def _run_action(self, action: str, value=None) -> None:
+        sc = self.services.system_control
+        try:
+            if action == 'lock':
+                ok, message = sc.lock()
+            elif action == 'logout':
+                ok, message = sc.logout()
+            elif action == 'reboot':
+                ok, message = sc.reboot()
+            elif action == 'shutdown':
+                ok, message = sc.shutdown()
+            elif action == 'suspend':
+                ok, message = sc.suspend()
+            elif action == 'brightness_up':
+                ok, message = sc.brightness_step(1)
+            elif action == 'brightness_down':
+                ok, message = sc.brightness_step(-1)
+            elif action == 'power_profiles':
+                ok, message = sc.power_profiles()
+            elif action == 'timezone':
+                ok, message = sc.set_timezone(value)
+            else:
+                ok, message = False, action
+            severity = 'information' if ok else 'error'
+            if not ok and not message:
+                message = t('system.failed')
+            self.app.call_from_thread(self.notify, message or t('system.done'),
+                                      severity=severity)
+        except Exception as exc:
+            self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
+                                      severity='error')
+
+    def action_back(self) -> None:
+        self.app.pop_screen()
+
+
+# ------------------------------------------------------------ Acerca de ----
+
+class AboutScreen(Screen):
+    """B · Info del sistema: SO, kernel, RAM, disco, batería, N paquetes."""
+
+    BINDINGS = [('escape', 'back', t('common.back'))]
+
+    def __init__(self, services: Services):
+        super().__init__()
+        self.services = services
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        yield Label(f'[b]{t("about.title")}[/]')
+        with VerticalScroll():
+            yield Static(t('common.loading'), id='about-text')
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self._collect()
+
+    @work(thread=True, exclusive=True)
+    def _collect(self) -> None:
+        from tui_manager.core.sysinfo import collect
+        info = collect(
+            distribution=self.services.distribution,
+            environment=self.services.environment,
+            system_control=self.services.system_control,
+            package_manager=self.services.package_manager,
+        )
+        self.app.call_from_thread(self._fill, info)
+
+    def _fill(self, info: dict) -> None:
+        battery = info.get('battery')
+        battery_text = '—'
+        if battery:
+            battery_text = f"{battery.get('percent')}% ({battery.get('status')})"
+        packages = info.get('packages')
+        text = '\n'.join([
+            f'{t("about.os")}: {info["os"]}',
+            f'{t("about.kernel")}: {info["kernel"]}',
+            f'{t("about.distro")}: {info["distro"]}',
+            f'{t("about.environment")}: {info["environment"]}',
+            f'{t("about.cpu")}: {info["cpu"]}',
+            f'{t("about.ram")}: {info["ram"] or t("about.na")}',
+            f'{t("about.disk")}: {info["disk"] or t("about.na")}',
+            f'{t("about.battery")}: {battery_text}',
+            f'{t("about.packages")}: {packages if packages is not None else t("about.na")}',
+        ])
+        self.query_one('#about-text', Static).update(text)
+
+    def action_back(self) -> None:
+        self.app.pop_screen()
+
+
+# ----------------------------------------------------------------- Logs ----
+
+class LogsScreen(Screen):
+    """E · Visor de logs: cola del log de la app con refresco manual."""
+
+    BINDINGS = [('r', 'refresh', t('common.refresh')),
+                ('escape', 'back', t('common.back'))]
+
+    def __init__(self, services: Services):
+        super().__init__()
+        self.services = services
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        yield Label(f'[b]{t("logs.title")}[/]')
+        with VerticalScroll():
+            yield Static('…', id='log-text')
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self._interval = self.set_interval(2.0, self.action_refresh)
+        self.action_refresh()
+
+    @work(thread=True, exclusive=True)
+    def action_refresh(self) -> None:
+        from pathlib import Path
+        path = Path.home() / '.tui-manager' / 'logs' / 'app.log'
+        try:
+            with open(path, 'r', errors='replace') as f:
+                lines = f.readlines()[-200:]
+            text = ''.join(lines) or t('logs.empty')
+        except FileNotFoundError:
+            text = t('logs.empty')
+        except OSError as exc:
+            text = f'{t("common.error")}: {exc}'
+        self.app.call_from_thread(self._fill, text)
+
+    def _fill(self, text: str) -> None:
+        self.query_one('#log-text', Static).update(text)
 
     def action_back(self) -> None:
         self.app.pop_screen()
