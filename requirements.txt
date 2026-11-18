@@ -1,0 +1,17 @@
+# TUI Manager - Requisitos
+#
+# Decisión: framework TUI = textual (único; urwid/blessed descartados).
+# Los adaptadores de paquetes usan subproceso puro: NO se requieren bindings
+# nativos (python-apt, pyalpm, pydnf, xbps-python) para ninguna distribución.
+
+# Core
+textual>=0.40.0           # Framework TUI (menús, estilos CSS, temas)
+pyyaml>=6.0.1             # Configuración y packs de temas
+python-json-logger>=2.0.7 # Logging estructurado
+
+# Desarrollo (pip install -r requirements-dev.txt o extras [dev])
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.7.0
+flake8>=6.1.0
+mypy>=1.5.0
