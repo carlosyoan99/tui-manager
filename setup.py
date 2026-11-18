@@ -6,10 +6,13 @@ Setup script para TUI Manager
 from setuptools import setup, find_packages
 from pathlib import Path
 
-# Leer archivo de requisitos
+# Versión PEP 440: 0.5.0b1 equivale a 0.5.0-beta.1 (tui_manager.__version__).
+
+# Leer archivo de requisitos (ruta absoluta: funciona aunque se construya
+# desde otro directorio, p. ej. al generar .deb/.rpm/PKGBUILD).
 def read_requirements():
     requirements = []
-    with open('requirements.txt', 'r') as f:
+    with (Path(__file__).parent / 'requirements.txt').open() as f:
         in_dev = False
         for line in f:
             line = line.strip()
@@ -50,7 +53,7 @@ setup(
     },
 
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: MIT License',

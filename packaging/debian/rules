@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+
+export PYBUILD_NAME = tui-manager
+
+%:
+	dh $@ --buildsystem=pybuild
+
+# La suite de tests usa los extras de desarrollo (pytest, pytest-cov, black,
+# flake8, mypy), que no son dependencias del paquete de producción.
+override_dh_auto_test:
+	@echo "Tests omitidos en el build: requieren extras [dev]"

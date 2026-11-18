@@ -1,277 +1,196 @@
-# Guía de Instalación
+# Guía de instalación
 
-## Requisitos Previos
+**TUI Manager** (`tui-manager`) — versión `0.5.0-beta.1`. Panel de control
+portable para la terminal: paquetes, procesos, sistema y temas, con un catálogo
+de 179 aplicaciones en 29 categorías.
 
-### Sistema Operativo
-- Linux (soportado: Debian, Ubuntu, Arch, Fedora, Void, Gentoo, OpenSUSE, Alpine)
-- Python 3.10 o superior
+## Requisitos
 
-### Dependencias del Sistema
-Dependiendo de tu distribución, necesitarás instalar los siguientes paquetes:
+- Python **3.10 o superior**.
+- Dependencias de Python: `textual>=0.40.0`, `pyyaml>=6.0.1` y
+  `python-json-logger>=2.0.7`. Los canales descritos abajo las instalan
+  automáticamente.
+- **No** se necesitan bindings nativos (`python-apt`, `pyalpm`, `pydnf`,
+  `xbps-python`): los adaptadores de paquetes llaman a los gestores del sistema
+  mediante subprocesos.
 
-#### Debian/Ubuntu
+El ejecutable se instala como `tui-manager`. También puede lanzarse con
+`python3 -m tui_manager.main`.
+
+> **Estado Beta 2:** la auditoría de acciones destructivas (B2-1) y los stacks
+> por rol, la detección opcional de `fwupdmgr` y los snapshots de configuración
+> (B2-3) están **en Beta 2**; no se describen aquí como funciones terminadas.
+> El rollback de una instalación fallida **nunca borra archivos del usuario**:
+> solo revierte directorios vacíos creados por el propio comando.
+
+---
+
+## Debian / Ubuntu
+
+**Canal natural: PyPI** (recomendado, sin paquetes del sistema adicionales):
+
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-pip python3-venv git
+python3 -m pip install --user tui-manager
 ```
 
-#### Arch Linux
+Añade `~/.local/bin` al `PATH` si aún no está (cierra y abre la terminal):
+
 ```bash
-sudo pacman -S python python-pip git
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 ```
 
-#### Fedora
+**Paquete `.deb` construible** — el descriptor está en `packaging/debian/`:
+
 ```bash
-sudo dnf install python3 python3-pip git
+sudo apt install -y build-essential debhelper dh-python python3-all python3-setuptools
+cp -r packaging/debian ./debian
+dpkg-buildpackage -us -uc -b
+sudo apt install ../tui-manager_0.5.0-1_all.deb
 ```
 
-#### Void Linux
+Las dependencias de ejecución se derivan de `setup.py` mediante `dh_python3`;
+no hay que instalarlas a mano.
+
+## Arch Linux y derivados
+
+**Canal natural: AUR** mediante el `PKGBUILD` de `packaging/PKGBUILD`:
+
 ```bash
+sudo pacman -S --needed base-devel git
+cd packaging && makepkg -si
+```
+
+El `PKGBUILD` declara `python`, `python-textual`, `python-pyyaml` y
+`python-json-logger`, así que `makepkg` resuelve las dependencias. Antes de
+publicarlo en AUR hay que verificar el tag `v0.5.0` y sustituir
+`sha256sums=('SKIP')` por la suma real. Mientras el paquete no esté en AUR,
+usa PyPI:
+
+```bash
+sudo pacman -S --needed python python-pip
+python -m pip install --user tui-manager
+```
+
+## Fedora
+
+**Canal natural: RPM construible** desde `packaging/tui-manager.spec`:
+
+```bash
+sudo dnf install -y rpm-build rpmdevtools python3-devel python3-setuptools python3-wheel
+rpmdev-setuptree
+cp packaging/tui-manager.spec ~/rpmbuild/SPECS/
+spectool -g -R ~/rpmbuild/SPECS/tui-manager.spec
+rpmbuild -ba ~/rpmbuild/SPECS/tui-manager.spec
+sudo dnf install ~/rpmbuild/RPMS/noarch/tui-manager-0.5.0-1.*.noarch.rpm
+```
+
+El spec genera las dependencias desde `install_requires` (`python3dist(...)`
+de `textual`, `pyyaml` y `python-json-logger`). Verifica antes que el tag
+`v0.5.0` exista. Alternativamente, desde PyPI:
+
+```bash
+sudo dnf install -y python3 python3-pip
+python3 -m pip install --user tui-manager
+```
+
+## Void Linux
+
+Void no tiene un descriptor propio en esta entrega; el canal natural es PyPI:
+
+```bash
+sudo xbps-install -Su
 sudo xbps-install -y python3 python3-pip git
+python3 -m pip install --user tui-manager
 ```
 
-#### Gentoo
+Añade `~/.local/bin` al `PATH` si es necesario.
+
+## FreeBSD
+
+**Canal natural: port / paquete `pkg`**. El esqueleto está en
+`packaging/freebsd/`:
+
 ```bash
-sudo emerge --ask --verbose dev-lang/python dev-python/pip git
+sudo pkg install -y python git
+cd packaging/freebsd
+make makesum          # genera distinfo; comprueba antes el tag v0.5.0
+sudo make install clean
 ```
 
-## Instalación desde Fuente
-
-### 1. Clonar el Repositorio
+El port declara los ports `py-*` equivalentes a `textual`, `pyyaml` y
+`python-json-logger`, por lo que no hay pasos manuales de dependencias. Si
+prefieres PyPI:
 
 ```bash
-git clone https://github.com/tu-usuario/TUI-Manager.git
+python -m pip install --user tui-manager
+```
+
+## Termux / Android (soporte limitado)
+
+Sin elevación de privilegios: paquetes del prefix, procesos propios y temas
+internos de la TUI. La detección usa `PREFIX`/`TERMUX_VERSION` y el menú de
+temas de escritorio aparece deshabilitado con su motivo.
+
+```bash
+pkg update && pkg upgrade
+pkg install -y python git
+python -m pip install tui-manager
+tui-manager --version
+```
+
+En Termux no se usa `sudo` ni `--user`: `pip` instala dentro de `$PREFIX`.
+Los nombres de paquetes difieren de Debian (p. ej. `python`, no `python3`).
+
+---
+
+## Instalación desde el código fuente (cualquier plataforma)
+
+```bash
+git clone https://github.com/carlosyoan/TUI-Manager.git
 cd TUI-Manager
+python3 -m venv .venv
+. .venv/bin/activate          # en Termux: . .venv/bin/activate (con `python`)
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e .
+tui-manager --version
 ```
 
-### 2. Crear Entorno Virtual (Recomendado)
+La configuración se lee desde `~/.config/tui-manager/config.yaml`; puedes
+partir de `config/default.yaml` del repositorio si quieres personalizarla.
+
+## Verificación
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # En Linux
-# o
-venv\Scripts\activate  # En Windows
-```
-
-### 3. Instalar Dependencias
-
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### 4. Instalar Dependencias del Sistema (Opcional)
-
-Si quieres soporte completo para tu distribución:
-
-**Debian/Ubuntu:**
-```bash
-sudo apt install -y python3-apt python3-pip
-```
-
-**Arch Linux:**
-```bash
-sudo pacman -S --needed python-pyalpm
-```
-
-**Fedora:**
-```bash
-sudo dnf install -y python3-pydnf
-```
-
-**Void Linux:**
-```bash
-sudo xbps-install -y xbps-python
-```
-
-### 5. Configurar el Programa
-
-```bash
-# Copiar configuración por defecto
-cp config/default.yaml config/config.yaml
-```
-
-### 6. Ejecutar el Programa
-
-```bash
-python main.py
-```
-
-## Instalación en Termux/Android (soporte limitado)
-
-En Termux el soporte es **limitado** por diseño (sin elevación de privilegios, `ps` restringido por Android): paquetes del prefix, procesos propios y temas internos de la TUI.
-
-```bash
-# 1. Requisitos de Termux
-pkg update
-pkg install python git
-
-# 2. Clonar e instalar
-git clone https://github.com/tu-usuario/TUI-Manager.git
-cd TUI-Manager
-python -m venv venv && . venv/bin/activate
-pip install -r requirements.txt
-
-# 3. Ejecutar
-python -m tui_manager.main   # o: python tui_manager/main.py
-```
-
-Notas:
-- Detección automática vía `PREFIX`/`TERMUX_VERSION` → el gestor usado es apt del prefix (comando `pkg`, envoltorio de apt con repos de Termux).
-- Los nombres de paquetes difieren de Debian (p. ej. `python` en vez de `python3`).
-- Opcional: si usás `proot-distro` con una distro completa, el adaptador de esa distro opera dentro del proot.
-- El menú Sistema/Temas de escritorio aparece deshabilitado con su motivo (no hay WM en Android).
-
-## Instalación como Sistema (Opcional)
-
-### Crear Enlace Simbólico
-
-```bash
-sudo ln -s $(pwd)/tui-manager /usr/local/bin/
-```
-
-Ahora puedes ejecutarlo desde cualquier lugar:
-```bash
-tui-manager
-```
-
-## Instalación con Script (Recomendado)
-
-### Script de Instalación
-
-```bash
-#!/bin/bash
-# install.sh
-
-set -e
-
-echo "=== Instalando TUI Manager ==="
-
-# Detectar distribución
-if [ -f /etc/debian_version ]; then
-    echo "Detectando Debian/Ubuntu..."
-    sudo apt update
-    sudo apt install -y python3 python3-pip python3-venv git
-elif [ -f /etc/arch-release ]; then
-    echo "Detectando Arch Linux..."
-    sudo pacman -S --needed python python-pip git
-elif [ -f /etc/fedora-release ]; then
-    echo "Detectando Fedora..."
-    sudo dnf install -y python3 python3-pip git
-elif [ -f /etc/void-release ]; then
-    echo "Detectando Void Linux..."
-    sudo xbps-install -y python3 python3-pip git
-else
-    echo "Distribución no soportada"
-    exit 1
-fi
-
-# Clonar repositorio
-if [ ! -d "TUI-Manager" ]; then
-    git clone https://github.com/tu-usuario/TUI-Manager.git
-    cd TUI-Manager
-fi
-
-# Crear entorno virtual
-python3 -m venv venv
-source venv/bin/activate
-
-# Instalar dependencias
-pip install --upgrade pip
-pip install -r requirements.txt
-
-# Instalar dependencias del sistema
-if [ -f /etc/debian_version ]; then
-    sudo apt install -y python3-apt
-elif [ -f /etc/arch-release ]; then
-    sudo pacman -S --needed python-pyalpm
-elif [ -f /etc/fedora-release ]; then
-    sudo dnf install -y python3-pydnf
-elif [ -f /etc/void-release ]; then
-    sudo xbps-install -y xbps-python
-fi
-
-echo "=== Instalación completada ==="
-echo "Para ejecutar, usa: python main.py"
-```
-
-Hacerlo ejecutable:
-```bash
-chmod +x install.sh
-./install.sh
+tui-manager --version    # 0.5.0-beta.1
+tui-manager --doctor     # SO, distro, gestor, entorno y capacidades
+tui-manager --lang es    # fuerza el idioma (es|en) para esta ejecución
 ```
 
 ## Desinstalación
 
-### 1. Eliminar el programa
-
 ```bash
-# Si instalaste con el script
-rm -rf TUI-Manager
-
-# Si creaste un enlace simbólico
-sudo rm /usr/local/bin/tui-manager
+python3 -m pip uninstall tui-manager      # instalación desde PyPI o fuente
 ```
 
-### 2. Eliminar configuración
+Si instalaste un paquete nativo, usa el gestor correspondiente:
+`sudo apt remove tui-manager` (Debian/Ubuntu), `pacman -R tui-manager` (Arch),
+`sudo dnf remove tui-manager` (Fedora), `sudo xbps-remove -R tui-manager`
+(Void) o `sudo pkg remove tui-manager` (FreeBSD).
 
-```bash
-rm -rf ~/.tui-manager
-```
+## Solución de problemas
 
-### 3. Desactivar entorno virtual
+- **`No module named 'textual'`** → reinstala las dependencias:
+  `python3 -m pip install -r requirements.txt`.
+- **`tui-manager: command not found`** → añade `~/.local/bin` al `PATH` (o
+  activa el entorno virtual creado desde fuente).
+- **Permisos insuficientes para gestionar paquetes** → no lances la TUI con
+  `sudo`: usa la elevación que la propia aplicación solicita (`sudo`/`doas`)
+  solo para la acción concreta.
+- **Distro no detectada** → revisa `/etc/os-release` (o `uname` en BSD); en
+  Termux comprueba que `PREFIX`/`TERMUX_VERSION` estén definidos.
 
-```bash
-deactivate
-rm -rf venv
-```
-
-## Actualización
-
-```bash
-cd TUI-Manager
-git pull
-source venv/bin/activate
-pip install -r requirements.txt --upgrade
-```
-
-## Solución de Problemas
-
-### Error: "No module named 'textual'"
-
-```bash
-pip install textual
-```
-
-> **Nota**: los adaptadores de paquetes usan subprocesos puros. **No se necesitan** bindings nativos (`python-apt`, `pyalpm`, `pydnf`, `xbps-python`) en ninguna distribución.
-
-### Error: "Permission denied"
-
-```bash
-# Ejecutar con sudo
-sudo python main.py
-
-# O agregar usuario al grupo sudo
-sudo usermod -aG sudo $USER
-# Necesitas cerrar sesión y volver a entrar
-```
-
-### Error: "Distribution not detected"
-
-```bash
-# Verificar que el archivo de distribución existe
-ls -l /etc/os-release
-ls -l /etc/debian_version
-# etc.
-```
-
-## Verificar Instalación
-
-```bash
-python3 -c "import textual; print('textual:', textual.__version__)"
-python3 -c "import yaml; print('yaml:', yaml.__version__)"
-```
-
-## Siguiente Paso
-
-Una vez instalado, consulta la [Guía de Uso](USAGE.md) para aprender a usar la aplicación.
+Consulta después la [guía de uso](USAGE.md) y la
+[documentación de la API](API.md#empaquetado).

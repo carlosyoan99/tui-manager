@@ -1,0 +1,29 @@
+# Maintainer: Carlos Yoan <carlosyoan@local>
+# Descriptor AUR para TUI Manager.
+# Versión 0.5.0 = release 0.5.0-beta.1 (PEP 440: 0.5.0b1).
+# Antes de publicar: comprobar que el tag v${pkgver} existe y reemplazar
+# sha256sums por la suma real (`makepkg -g`). No se ejecutó ningún build.
+# Las dependencias reflejan requirements.txt (textual, pyyaml, python-json-logger);
+# ajustar los nombres de los paquetes de Arch si difieren en los repos vigentes.
+
+pkgname=tui-manager
+pkgver=0.5.0
+pkgrel=1
+pkgdesc='Panel de control portable para la terminal: paquetes, procesos, sistema y temas'
+arch=('any')
+url='https://github.com/carlosyoan/TUI-Manager'
+license=('MIT')
+depends=('python' 'python-textual' 'python-pyyaml' 'python-json-logger')
+makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
+source=("$url/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "${srcdir}/TUI-Manager-${pkgver}"
+    python -m build --wheel --no-isolation
+}
+
+package() {
+    cd "${srcdir}/TUI-Manager-${pkgver}"
+    python -m installer --destdir="${pkgdir}" dist/*.whl
+}
