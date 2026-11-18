@@ -7,11 +7,32 @@ Formatos reales verificados:
 """
 
 import logging
+import unicodedata
 from typing import List
 from .package_adapter import PackageAdapter, Package, PackageNotFoundError
 from .categories import CATEGORIES as _BASE_CATEGORIES, get_category as _shared_category
 
 logger = logging.getLogger(__name__)
+
+
+def _norm_key(key: str) -> str:
+    """Normaliza una clave de pacman -Qi a ASCII minúsculo (inglés/español)."""
+    ascii_key = unicodedata.normalize('NFKD', key).encode('ascii', 'ignore').decode()
+    return ' '.join(ascii_key.strip().lower().split())
+
+
+# Aliases de claves de `pacman -Qi` en inglés y español (CachyOS localizado).
+_KEY_ALIASES = {
+    'name': 'name', 'nombre': 'name',
+    'version': 'version',
+    'description': 'description', 'descripcion': 'description',
+    'depends on': 'depends', 'depende de': 'depends',
+    'installed size': 'size', 'tamano de la instalacion': 'size',
+}
+
+
+def _field(key: str) -> str:
+    return _KEY_ALIASES.get(_norm_key(key), '')
 
 
 class ArchAdapter(PackageAdapter):
@@ -49,20 +70,21 @@ class ArchAdapter(PackageAdapter):
             if ':' not in line:
                 continue
             key, _, value = line.partition(':')
-            key = key.strip()
+            field = _field(key)
             value = value.strip()
-            if key == 'Name':
+            if field == 'name':
                 if current:
                     packages.append(current)
                 current = Package(name=value, installed=True)
-            elif current is not None:
-                if key == 'Version':
+            elif current is not None and value:
+                if field == 'version':
                     current.version = value
-                elif key == 'Description':
+                elif field == 'description':
                     current.description = value
-                elif key == 'Depends On':
-                    if value:
-                        current.dependencies = [d.strip() for d in value.split(',')]
+                elif field == 'depends':
+                    current.dependencies = [d.strip() for d in value.split(',')]
+                elif field == 'size':
+                    current.size = value
 
         if current:
             packages.append(current)
@@ -82,14 +104,17 @@ class ArchAdapter(PackageAdapter):
             if ':' not in line:
                 continue
             key, _, value = line.partition(':')
-            key, value = key.strip(), value.strip()
-            if key == 'Description':
+            field, value = _field(key), value.strip()
+            if not value:
+                continue
+            if field == 'description':
                 info.description = value
-            elif key == 'Version':
+            elif field == 'version':
                 info.version = value
-            elif key == 'Depends On':
-                if value:
-                    info.dependencies = [d.strip() for d in value.split(',')]
+            elif field == 'depends':
+                info.dependencies = [d.strip() for d in value.split(',')]
+            elif field == 'size':
+                info.size = value
         return info
 
     def install_package(self, package_name: str, confirm: bool = True) -> bool:

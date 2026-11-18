@@ -14,6 +14,7 @@ import os
 import shutil
 import subprocess
 import logging
+import time
 from dataclasses import dataclass
 from typing import List, Optional, Callable, Dict
 
@@ -30,7 +31,12 @@ class InstallSource:
     label: str                # etiqueta legible
     command: List[str]        # comando base a ejecutar
     is_official: bool = False # si viene del repositorio oficial
-    Requires_sudo: bool = False
+    requires_sudo: bool = False
+
+    @property
+    def Requires_sudo(self) -> bool:
+        """Alias legado (deprecado): usar `requires_sudo`."""
+        return self.requires_sudo
 
     def describe(self) -> str:
         return f"[{self.type.upper()}] {self.label}"
@@ -174,7 +180,7 @@ class AlternativeSourceManager:
                 label=f"{label}: {identifier}",
                 command=command,
                 is_official=(src_type == 'repo'),
-                Requires_sudo=(src_type in ('repo', 'snap')),
+                requires_sudo=(src_type in ('repo', 'snap')),
             ))
 
         return self.validate_sources(sources)
@@ -233,7 +239,7 @@ class AlternativeSourceManager:
         sources = self.build_sources(app, package_installed)
 
         if not sources:
-            print(f"\n⚠️  No hay fuentes disponibles para '{app.name}' en este sistema.")
+            logger.warning("sin fuentes disponibles para %s en este sistema", app.name)
             return None
 
         # Si solo hay una fuente y es oficial, usarla directamente
@@ -307,31 +313,57 @@ class AlternativeSourceManager:
 
         return self._execute_install(app, source)
 
+    # Timeout de una instalación individual (segundos)
+    INSTALL_TIMEOUT = 300
+
+    @staticmethod
+    def _tail(text: str, lines: int = 20) -> str:
+        """Acota stderr/stdout a las últimas líneas para no llenar el log."""
+        if not text:
+            return ''
+        return ' | '.join(text.strip().splitlines()[-lines:])
+
+    def _log_result(self, app, source, *, ok: bool, returncode: int,
+                    started: float, error: str = '') -> None:
+        """Log estructurado: app, source, returncode, duracion_ms, exit_code."""
+        duracion_ms = int((time.monotonic() - started) * 1000)
+        base = ('app=%s source=%s returncode=%s duracion_ms=%s exit_code=%s'
+                % (app.name, source.type, returncode, duracion_ms,
+                   0 if ok else 1))
+        if ok:
+            logger.info('instalacion_ok %s', base)
+        else:
+            logger.error('instalacion_fallo %s error=%s', base, self._tail(error))
+
     def _execute_install(self, app: AppEntry, source: InstallSource) -> bool:
-        """Ejuta la instalación desde la fuente seleccionada"""
+        """Ejecuta la instalación con captura, timeout y logs auditable."""
         command = source.command.copy()
-        if source.Requires_sudo:
+        if source.requires_sudo:
             command.insert(0, 'sudo')
 
-        print(f"\n🚀 Instalando '{app.name}' desde {source.describe()}...")
-        print(f"   Comando: {' '.join(command)}")
-
+        started = time.monotonic()
         try:
-            result = subprocess.run(command, capture_output=False, text=True)
-            if result.returncode == 0:
-                print(f"\n✅ '{app.name}' instalado correctamente desde {source.type}")
-                logger.info(f"Instalación exitosa: {app.name} desde {source.type}")
-                return True
-            else:
-                print(f"\n❌ Error al instalar '{app.name}' (código {result.returncode})")
-                logger.error(f"Falló instalación: {app.name} desde {source.type}")
-                return False
-        except FileNotFoundError:
-            print(f"\n❌ Herramienta no disponible: {command[0]}")
+            result = subprocess.run(
+                command, capture_output=True, text=True,
+                timeout=self.INSTALL_TIMEOUT,
+            )
+            ok = result.returncode == 0
+            self._log_result(
+                app, source, ok=ok, returncode=result.returncode,
+                started=started, error=result.stderr if not ok else '',
+            )
+            return ok
+        except subprocess.TimeoutExpired:
+            self._log_result(app, source, ok=False, returncode=-1,
+                             started=started, error='timeout')
             return False
-        except Exception as e:
-            print(f"\n❌ Error inesperado: {e}")
-            logger.error(f"Error inesperado instalando {app.name}: {e}")
+        except FileNotFoundError:
+            self._log_result(app, source, ok=False, returncode=-1, started=started,
+                             error=f'herramienta no disponible: {command[0]}')
+            return False
+        except Exception as exc:
+            self._log_result(app, source, ok=False, returncode=-1, started=started,
+                             error=str(exc))
             return False
 
     # ------------------------------------------------------------------

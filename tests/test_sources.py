@@ -216,3 +216,69 @@ def test_github_needs_git_or_curl(monkeypatch):
     monkeypatch.setattr(mod.shutil, 'which', lambda t, *a, **k: None)
     mgr = AlternativeSourceManager(package_manager='apt')
     assert mgr.get_available_tools()['github'] is False
+
+
+# ------------------------------------------------ ST-2: ejecución segura ----
+
+def test_execute_install_captures_output_and_timeout(monkeypatch, caplog):
+    """_execute_install usa capture_output=True y un timeout explícito."""
+    import logging
+    import subprocess
+    from types import SimpleNamespace
+    from tui_manager.core.alternative_sources import InstallSource
+
+    caplog.set_level(logging.DEBUG)
+    calls = []
+
+    def spy(cmd, **kwargs):
+        calls.append((tuple(cmd), kwargs))
+        return SimpleNamespace(returncode=0, stdout='ok', stderr='')
+
+    monkeypatch.setattr(subprocess, 'run', spy)
+    mgr = AlternativeSourceManager()
+    source = InstallSource('github', 'x/y', 'x',
+                           ['git', 'clone', 'https://github.com/x/y.git'])
+
+    assert mgr._execute_install(get_app_by_name('btop'), source) is True
+    assert len(calls) == 1
+    assert calls[0][1]['capture_output'] is True
+    assert calls[0][1]['text'] is True
+    assert calls[0][1]['timeout'] == mgr.INSTALL_TIMEOUT
+    assert 'instalacion_ok' in caplog.text
+    for field in ('app=btop', 'source=github', 'returncode=0',
+                  'duracion_ms=', 'exit_code=0'):
+        assert field in caplog.text
+
+
+def test_execute_install_logs_failure_with_tail(monkeypatch, caplog):
+    """Un fallo registra returncode/error acotado, sin print de producción."""
+    import logging
+    import subprocess
+    from types import SimpleNamespace
+    from tui_manager.core.alternative_sources import InstallSource
+
+    caplog.set_level(logging.DEBUG)
+    stderr = '\n'.join(f'línea {i}' for i in range(40))
+
+    def spy(cmd, **kwargs):
+        return SimpleNamespace(returncode=7, stdout='', stderr=stderr)
+
+    monkeypatch.setattr(subprocess, 'run', spy)
+    mgr = AlternativeSourceManager()
+    source = InstallSource('flatpak', 'org.x.Y', 'x',
+                           ['flatpak', 'install', '-y', 'org.x.Y'])
+
+    assert mgr._execute_install(get_app_by_name('firefox'), source) is False
+    assert 'instalacion_fallo' in caplog.text
+    assert 'returncode=7' in caplog.text
+    assert 'exit_code=1' in caplog.text
+    assert 'línea 39' in caplog.text      # última línea conservada
+    assert 'línea 0' not in caplog.text   # las 20 primeras se descartan
+
+
+def test_requires_sudo_alias_backwards_compatible():
+    """El alias Requires_sudo sigue devolviendo el valor de requires_sudo."""
+    from tui_manager.core.alternative_sources import InstallSource
+    s = InstallSource('repo', 'apt', 'apt', ['apt'], requires_sudo=True)
+    assert s.requires_sudo is True
+    assert s.Requires_sudo is True

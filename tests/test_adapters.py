@@ -105,6 +105,29 @@ def test_arch_installed(fake_runner):
     assert pkgs[1].dependencies == ['openssl', 'zlib']
 
 
+def test_arch_installed_localized_spanish(fake_runner):
+    """CachyOS con locale es_ES: pacman -Qi usa Nombre/Versión/Depende de."""
+    fake_runner.expect(['pacman', '-Qi'], stdout=(
+        "Installed From            : Nada\n"
+        "Nombre                    : a52dec\n"
+        "Versión                   : 0.8.0-3\n"
+        "Descripción               : Library for decoding ATSC A/52\n"
+        "Depende de                : glibc\n"
+        "Tamaño de la instalación  : 132,34 KiB\n"
+        "\n"
+        "Nombre                    : bash\n"
+        "Versión                   : 5.2.26-1\n"
+        "Descripción               : The GNU Bourne Again shell\n"
+        "Depende de                : glibc, readline\n"
+    ))
+    pkgs = ArchAdapter().get_installed_packages()
+    assert len(pkgs) == 2
+    assert pkgs[0].name == 'a52dec' and pkgs[0].version == '0.8.0-3'
+    assert 'ATSC' in pkgs[0].description
+    assert pkgs[0].dependencies == ['glibc']
+    assert pkgs[1].name == 'bash' and pkgs[1].dependencies == ['glibc', 'readline']
+
+
 def test_arch_search(fake_runner):
     fake_runner.expect(['pacman', '-Ss', 'curl'], stdout=(
         "core/curl 8.9.1-1 [installed]\n"
