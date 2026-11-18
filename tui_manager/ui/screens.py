@@ -44,6 +44,19 @@ from tui_manager.core.sources_adapter import SourcesAdapter
 logger = logging.getLogger(__name__)
 
 
+def _status(message: str, keys: str = '', empty: bool = False) -> str:
+    """Compone el texto del widget de status con jerarquía uniforme.
+
+    Todas las tablas/listas usan un ``Static`` con la clase CSS ``status``.
+    Cuando no hay datos se añade la clave i18n existente ``common.empty``
+    para que la lista vacía nunca quede muda (B1-2).
+    """
+    if empty:
+        empty_text = t('common.empty')
+        message = f'{message} · {empty_text}' if message else empty_text
+    return f'{message} — {keys}' if keys else message
+
+
 # ---------------------------------------------------------------- Menú ----
 
 class MainMenuScreen(Screen):
@@ -162,10 +175,18 @@ class PackagesScreen(Screen):
         self.query_one('#packages-loading', LoadingIndicator).display = True
         self.load_installed()
 
-    @work(thread=True, exclusive=True)
-    def load_installed(self) -> None:
+    def _fetch_installed(self) -> None:
+        """Obtiene los paquetes y vuelca la tabla en el hilo de la UI.
+
+        Se llama desde un worker (carga inicial o acción de instalar/remover)
+        para no crear workers anidados al recargar tras una acción.
+        """
         packages = self.services.package_manager.get_installed_packages()
         self.app.call_from_thread(self._fill, packages, t('packages.installed_list'))
+
+    @work(thread=True, exclusive=True)
+    def load_installed(self) -> None:
+        self._fetch_installed()
 
     @work(thread=True, exclusive=True)
     def load_search(self, query: str) -> None:
@@ -185,8 +206,9 @@ class PackagesScreen(Screen):
             self.query_one('#packages-loading', LoadingIndicator).display = False
         except Exception:
             pass
-        self.query_one('#packages-status', Static).update(
-            f'{origin}: {len(self._packages)} — {t("packages.keys")}')
+        self.query_one('#packages-status', Static).update(_status(
+            f'{origin}: {len(self._packages)}', t('packages.keys'),
+            empty=not self._packages))
 
     @on(Input.Submitted, '#search')
     def search_submitted(self, event: Input.Submitted) -> None:
@@ -248,11 +270,14 @@ class PackagesScreen(Screen):
             message = t(key, name=pkg.name) if ok else t('packages.action_failed')
             self.app.call_from_thread(self.notify, message,
                                       severity='information' if ok else 'error')
-            self.load_installed()
         except Exception as exc:
             logger.exception('acción de paquete falló')
             self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
                                       severity='error')
+        finally:
+            # Flujo coherente: notify → recargar tabla → ocultar indicador.
+            # La recarga usa el worker actual (sin anidar otros workers).
+            self._fetch_installed()
 
     def action_info(self) -> None:
         pkg = self._selected_package()
@@ -357,8 +382,9 @@ class ProcessesScreen(Screen):
                           f'{proc.mem:.1f}', str(proc.nice), proc.time,
                           proc.command[:60])
         sort_label = t(f'processes.sort_{self._sort}')
-        self.query_one('#process-status', Static).update(
-            f'{len(self._processes)} · {sort_label} — {t("processes.keys")}')
+        self.query_one('#process-status', Static).update(_status(
+            f'{len(self._processes)} · {sort_label}', t('processes.keys'),
+            empty=not self._processes))
 
     @on(Input.Submitted, '#proc-filter')
     def filter_submitted(self, event: Input.Submitted) -> None:
@@ -604,8 +630,9 @@ class ThemesScreen(Screen):
                 id=pack.name))
         if self._packs:
             menu.index = 0
-        self.query_one('#themes-status', Static).update(
-            f'{t("themes.packs")}: {len(self._packs)} — {t("themes.keys")}')
+        self.query_one('#themes-status', Static).update(_status(
+            f'{t("themes.packs")}: {len(self._packs)}', t('themes.keys'),
+            empty=not self._packs))
 
     def _selected_pack(self):
         menu = self.query_one('#themes-list', ListView)
@@ -818,7 +845,7 @@ class UpdatesScreen(Screen):
         if shutil.which('fwupdmgr'):
             message += f' · [F] {t("updates.firmware")}'
         self.query_one('#updates-status', Static).update(
-            f'{message} — {t("updates.keys")}')
+            _status(message, t('updates.keys'), empty=not self._updates))
 
     # --- upgrade ---
 
@@ -966,6 +993,7 @@ class SystemScreen(Screen):
         menu.clear()
         self._available = self.services.system_control.availability()
         first_enabled = None
+        enabled = 0
         for index, (action_id, avail_key) in enumerate(self.ORDER):
             label = t(f'system.{action_id}')
             reason = self._available.get(avail_key)
@@ -975,11 +1003,15 @@ class SystemScreen(Screen):
                                      classes='disabled'))
             else:
                 menu.append(ListItem(Static(label), id=action_id))
+                enabled += 1
                 if first_enabled is None:
                     first_enabled = index
         if first_enabled is not None:
             menu.index = first_enabled
         menu.focus()
+        self.query_one('#system-status', Static).update(_status(
+            f'{t("common.actions")}: {enabled}', t('system.keys'),
+            empty=enabled == 0))
 
     @on(ListView.Selected)
     def run_action(self, event: ListView.Selected) -> None:
@@ -1157,6 +1189,7 @@ class LogsScreen(Screen):
         yield Label(f'[b]{t("logs.title")}[/]', classes='title')
         with VerticalScroll():
             yield Static('…', id='log-text', markup=False)
+        yield Static('', id='logs-status', classes='status', markup=False)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -1179,6 +1212,10 @@ class LogsScreen(Screen):
 
     def _fill(self, text: str) -> None:
         self.query_one('#log-text', Static).update(text)
+        empty = not text or text == t('logs.empty')
+        message = '' if empty else f'{t("logs.title")}: {len(text.splitlines())}'
+        self.query_one('#logs-status', Static).update(
+            _status(message, empty=empty))
 
     def action_back(self) -> None:
         self.app.pop_screen()
@@ -1251,6 +1288,7 @@ class SelectScreen(ModalScreen):
         with Vertical(classes='dialog'):
             yield Label(self.title)
             yield ListView(id='source-options')
+            yield Static('', id='sources-status', classes='status', markup=False)
             yield Footer()
 
     def on_mount(self) -> None:
@@ -1261,6 +1299,9 @@ class SelectScreen(ModalScreen):
             view.append(ListItem(Static(label), id=str(i)))
         if self.options:
             view.index = 0
+        self.query_one('#sources-status', Static).update(_status(
+            f'{len(self.options)} · {t("apps.sources")}',
+            empty=not self.options))
         view.focus()
 
     @on(ListView.Selected)
@@ -1320,9 +1361,9 @@ class AppsScreen(Screen):
         for app in self._apps:
             table.add_row(app.name, app.category,
                           self.adapter.source_summary(app), app.description)
-        self.query_one('#apps-status', Static).update(
-            f'{len(self._apps)} apps — {t("apps.category")}: {self._category}'
-        )
+        self.query_one('#apps-status', Static).update(_status(
+            f'{len(self._apps)} apps — {t("apps.category")}: {self._category}',
+            empty=not self._apps))
         try:
             self.query_one('#apps-loading', LoadingIndicator).display = False
         except Exception:
@@ -1412,11 +1453,14 @@ class AppsScreen(Screen):
                 msg = f'{t("packages.action_failed")}: {result.error or "—"}'
             self.app.call_from_thread(self.notify, msg,
                                       severity='information' if result.ok else 'error')
-            self.app.call_from_thread(self._reload)
         except Exception as exc:
             logger.exception('instalación desde fuente falló')
             self.app.call_from_thread(
                 self.notify, f'{t("common.error")}: {exc}', severity='error')
+        finally:
+            # Instalar desde el catálogo siempre recarga la tabla (y oculta
+            # el indicador dentro de _reload), también si la acción falló.
+            self.app.call_from_thread(self._reload)
 
 # -------------------------------------------------------- Compatibilidad ----
 

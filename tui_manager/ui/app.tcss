@@ -26,6 +26,8 @@ Footer {
     color: $text-muted;
 }
 
+/* Jerarquía visual única: todo título usa `.title` y todo estado (incluidos
+   los estados vacíos y los modales) usa `.status`. Sin variantes por pantalla. */
 .status {
     height: 1;
     padding: 0 2;
