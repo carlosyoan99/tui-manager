@@ -137,3 +137,82 @@ def test_sources_adapter_list_and_sources():
     assert srcs
     assert adapter.has_alternatives(get_app_by_name('code')) is True
     assert adapter.preferred_format() == 'auto'
+
+
+# ------------------------------------------- ST-1: validación de fuentes ----
+
+def test_build_sources_uses_shutil_not_subprocess(monkeypatch):
+    """Con shutil.which mockeado, build_sources NO llama a subprocess.run."""
+    import subprocess
+    import tui_manager.core.alternative_sources as mod
+
+    def which(tool, *a, **k):
+        return f'/usr/bin/{tool}' if tool in ('pacman', 'flatpak', 'git') else None
+
+    monkeypatch.setattr(mod.shutil, 'which', which)
+    monkeypatch.setattr(subprocess, 'run',
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            AssertionError('subprocess.run no debió llamarse')))
+
+    mgr = AlternativeSourceManager(package_manager='pacman')
+    # btop declara repo + github en el catálogo
+    assert [s.type for s in mgr.build_sources(get_app_by_name('btop'))] == [
+        'repo', 'github']
+    # code declara repo + flatpak + snap + appimage; sin snap ni URL de
+    # AppImage solo sobreviven repo y flatpak
+    assert [s.type for s in mgr.build_sources(get_app_by_name('code'))] == [
+        'repo', 'flatpak']
+
+
+def test_appimage_without_real_url_is_discarded(monkeypatch):
+    """Un AppImage con identificador no-URL no se ofrece."""
+    import tui_manager.core.alternative_sources as mod
+    monkeypatch.setattr(mod.shutil, 'which', lambda t, *a, **k: '/bin/true')
+
+    mgr = AlternativeSourceManager(package_manager='apt')
+    app = get_app_by_name('vivaldi')  # tiene 'appimage' sin URL en identifiers
+    assert 'appimage' not in app.identifiers
+    assert 'appimage' not in [s.type for s in mgr.build_sources(app)]
+
+
+def test_appimage_with_real_url_is_kept(monkeypatch):
+    """Un AppImage con URL http(s) explícita sí se ofrece."""
+    import tui_manager.core.alternative_sources as mod
+    monkeypatch.setattr(mod.shutil, 'which', lambda t, *a, **k: '/bin/true')
+
+    mgr = AlternativeSourceManager(package_manager='apt')
+    source = mod.InstallSource(
+        type='appimage', identifier='https://example.com/App.AppImage',
+        label='App', command=['wget', 'https://example.com/App.AppImage'],
+    )
+    assert mgr.validate_sources([source]) == [source]
+
+
+def test_repo_requires_real_package_manager(monkeypatch):
+    """Sin gestor en el PATH no se ofrece la fuente repo."""
+    import tui_manager.core.alternative_sources as mod
+
+    class NoManager:
+        def get_package_manager(self):
+            return 'unknown'
+
+    monkeypatch.setattr(mod.shutil, 'which', lambda t, *a, **k: None)
+    mgr = AlternativeSourceManager()
+    monkeypatch.setattr(
+        'tui_manager.core.distribution.DistributionDetector.get_package_manager',
+        NoManager().get_package_manager,
+    )
+    assert mgr.get_available_tools()['repo'] is False
+
+    monkeypatch.setattr(mod.shutil, 'which',
+                        lambda t, *a, **k: '/usr/bin/apt' if t == 'apt' else None)
+    mgr2 = AlternativeSourceManager(package_manager='apt')
+    assert mgr2.get_available_tools()['repo'] is True
+
+
+def test_github_needs_git_or_curl(monkeypatch):
+    """Sin git ni curl no se ofrece la fuente github."""
+    import tui_manager.core.alternative_sources as mod
+    monkeypatch.setattr(mod.shutil, 'which', lambda t, *a, **k: None)
+    mgr = AlternativeSourceManager(package_manager='apt')
+    assert mgr.get_available_tools()['github'] is False

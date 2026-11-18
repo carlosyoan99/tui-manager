@@ -11,6 +11,7 @@ Reglas importantes:
 """
 
 import os
+import shutil
 import subprocess
 import logging
 from dataclasses import dataclass
@@ -67,11 +68,14 @@ class AlternativeSourceManager:
 
     def __init__(self, config=None,
                  confirm_callback: Callable = None,
-                 select_callback: Callable = None):
+                 select_callback: Callable = None,
+                 package_manager: str = None):
         self.config = config
         self.confirm_callback = confirm_callback or self._default_confirm
         self.select_callback = select_callback or self._default_select
         self.preferred_format = self._get_preferred_format()
+        # Inyectable para tests: evita detectedores que llaman a subprocess.
+        self._package_manager = package_manager
 
     # ------------------------------------------------------------------
     # Preferencias
@@ -115,18 +119,28 @@ class AlternativeSourceManager:
     # ------------------------------------------------------------------
     @staticmethod
     def tool_available(tool: str) -> bool:
-        """Verifica si una herramienta está instalada"""
-        result = subprocess.run(['which', tool], capture_output=True, text=True)
-        return result.returncode == 0
+        """Verifica si una herramienta está en el PATH (sin subprocess)."""
+        return shutil.which(tool) is not None
+
+    def _manager_available(self) -> bool:
+        """True solo si el gestor de paquetes de la distro existe y está en PATH."""
+        manager = self._package_manager
+        if manager is None:
+            try:
+                from .distribution import DistributionDetector
+                manager = DistributionDetector.get_package_manager()
+            except Exception:
+                manager = None
+        return bool(manager) and manager != 'unknown' and self.tool_available(manager)
 
     def get_available_tools(self) -> Dict[str, bool]:
-        """Obtiene qué herramientas de instalación están disponibles"""
+        """Obtiene qué herramientas de instalación están realmente disponibles."""
         return {
             'flatpak': self.tool_available('flatpak'),
             'snap': self.tool_available('snap'),
             'github': self.tool_available('git') or self.tool_available('curl'),
             'appimage': self.tool_available('wget') or self.tool_available('curl'),
-            'repo': True,
+            'repo': self._manager_available(),
         }
 
     # ------------------------------------------------------------------
@@ -163,7 +177,29 @@ class AlternativeSourceManager:
                 Requires_sudo=(src_type in ('repo', 'snap')),
             ))
 
-        return sources
+        return self.validate_sources(sources)
+
+    def validate_sources(self, sources: List[InstallSource]) -> List[InstallSource]:
+        """
+        Descarta fuentes que no se pueden ejecutar de forma fiable.
+
+        Reglas:
+          - todo comando debe tener al menos un argumento;
+          - AppImage requiere una URL http(s) real en el identificador
+            (no se inventa una ruta de release).
+        """
+        valid = []
+        for source in sources:
+            if not source.command:
+                logger.debug("Fuente descartada (sin comando): %s", source.type)
+                continue
+            if source.type == 'appimage':
+                ident = source.identifier
+                if not isinstance(ident, str) or not ident.startswith(('http://', 'https://')):
+                    logger.debug("AppImage descartado (sin URL): %s", ident)
+                    continue
+            valid.append(source)
+        return valid
 
     def _build_command(self, src_type: str, identifier: str) -> List[str]:
         """Construye el comando de instalación según la fuente"""
@@ -176,7 +212,10 @@ class AlternativeSourceManager:
         elif src_type == 'snap':
             return ['snap', 'install', identifier]
         elif src_type == 'appimage':
-            return ['wget', f'https://github.com/{identifier}/releases/latest/download/appimage']
+            # No inventar URLs: solo se acepta una URL http(s) explícita.
+            if isinstance(identifier, str) and identifier.startswith(('http://', 'https://')):
+                return ['wget', identifier]
+            return []
         return []
 
     # ------------------------------------------------------------------
