@@ -376,12 +376,17 @@ class ProcessesScreen(Screen):
                           f'{t("common.cpu")} %', f'{t("common.memory")} %',
                           'NI', 'TIME', 'COMMAND')
         table.focus()
+        # B3-2: el intervalo se lee de la configuración (validada por
+        # Config.set_refresh_interval, mínimo 1 s) y se guarda para poder
+        # inspeccionarlo/verificarlo en tests sin esperar tiempo real.
+        self._poll_interval = max(
+            1, int(self.services.config.get_refresh_interval()))
         self._interval = self.set_interval(
-            max(1, int(self.services.config.get('refresh_interval', 2))),
-            self._tick)
+            self._poll_interval, self._tick, name='processes-poll')
         self._tick()
 
     def _tick(self) -> None:
+        """Sondeo periódico: solo programa el worker si no está pausado."""
         if not self._paused:
             self.refresh_table()
 
@@ -392,6 +397,10 @@ class ProcessesScreen(Screen):
         self.app.call_from_thread(self._fill, processes)
 
     def _fill(self, processes) -> None:
+        # Un worker puede terminar justo cuando la pantalla se desmonta:
+        # descartar el resultado en vez de fallar con NoMatches.
+        if not self.is_mounted:
+            return
         if self._sort == 'mem':
             ordered = sorted(processes, key=lambda p: p.mem, reverse=True)
         else:
@@ -423,10 +432,31 @@ class ProcessesScreen(Screen):
         self._sort = 'mem' if self._sort == 'cpu' else 'cpu'
         self._fill(self._processes)
 
+    def pause_polling(self) -> None:
+        """Pausa el sondeo: se detiene el timer y `_tick` no hace nada."""
+        if self._paused:
+            return
+        self._paused = True
+        self._interval.pause()
+        self.notify(t('processes.paused'))
+
+    def resume_polling(self) -> None:
+        """Reanuda el sondeo del timer y refresca la tabla de inmediato."""
+        if not self._paused:
+            return
+        self._paused = False
+        # `reset` reactiva el timer y reinicia su cuenta: evita un tick de
+        # "atrapo" inmediato con el tiempo transcurrido durante la pausa.
+        self._interval.reset()
+        self.notify(t('common.refresh_done'))
+        self._tick()
+
     def action_pause(self) -> None:
-        self._paused = not self._paused
-        self.notify(t('processes.paused') if self._paused
-                    else t('common.refresh_done'))
+        """p: alterna pausa / reanudación del sondeo de procesos."""
+        if self._paused:
+            self.resume_polling()
+        else:
+            self.pause_polling()
 
     def _selected_process(self):
         table = self.query_one('#process-table', DataTable)
@@ -435,19 +465,28 @@ class ProcessesScreen(Screen):
         return None
 
     def _send_signal(self, confirmed, signal: int) -> None:
+        """Callback del modal: solo valida y delega el I/O a un worker."""
         if not confirmed:
             return
         proc = self._selected_process()
         if not proc:
             return
+        self._signal_worker(proc.pid, signal)
+
+    @work(thread=True, exclusive=False)
+    def _signal_worker(self, pid: int, signal: int) -> None:
+        """Envía la señal en segundo plano (`kill_process` usa subprocess)."""
         try:
-            ok = self.services.process_monitor.kill_process(proc.pid, signal=signal)
-            self.notify(t('processes.kill_ok', pid=proc.pid)
-                        if ok else t('processes.kill_failed', pid=proc.pid),
-                        severity='information' if ok else 'error')
+            ok = self.services.process_monitor.kill_process(pid, signal=signal)
+            self.app.call_from_thread(
+                self.notify,
+                t('processes.kill_ok', pid=pid) if ok
+                else t('processes.kill_failed', pid=pid),
+                severity='information' if ok else 'error')
         except Exception as exc:
-            self.notify(f'{t("common.error")}: {exc}', severity='error')
-        self.refresh_table()
+            self.app.call_from_thread(
+                self.notify, f'{t("common.error")}: {exc}', severity='error')
+        self.app.call_from_thread(self.refresh_table)
 
     def action_kill(self) -> None:
         proc = self._selected_process()
@@ -469,22 +508,33 @@ class ProcessesScreen(Screen):
                                  self._do_renice)
 
     def _do_renice(self, value) -> None:
+        """Callback del modal: valida en la UI y delega el I/O al worker."""
         if value is None:
             return
         proc = self._selected_process()
+        if not proc:
+            return
         try:
             nice = int(value)
         except (TypeError, ValueError):
             self.notify(f'{t("common.error")}: {value}', severity='error')
             return
+        self._renice_worker(proc.pid, nice)
+
+    @work(thread=True, exclusive=False)
+    def _renice_worker(self, pid: int, nice: int) -> None:
+        """Cambia el nice en segundo plano (`renice_process` usa subprocess)."""
         try:
-            ok = self.services.process_monitor.renice_process(proc.pid, nice)
-            self.notify(t('processes.kill_ok', pid=proc.pid)
-                        if ok else t('processes.kill_failed', pid=proc.pid),
-                        severity='information' if ok else 'error')
+            ok = self.services.process_monitor.renice_process(pid, nice)
+            self.app.call_from_thread(
+                self.notify,
+                t('processes.kill_ok', pid=pid) if ok
+                else t('processes.kill_failed', pid=pid),
+                severity='information' if ok else 'error')
         except Exception as exc:
-            self.notify(f'{t("common.error")}: {exc}', severity='error')
-        self.refresh_table()
+            self.app.call_from_thread(
+                self.notify, f'{t("common.error")}: {exc}', severity='error')
+        self.app.call_from_thread(self.refresh_table)
 
     def action_help(self) -> None:
         """?: ayuda contextual de procesos."""

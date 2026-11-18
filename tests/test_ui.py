@@ -831,3 +831,197 @@ async def test_main_menu_question_mark_opens_help(tmp_path, monkeypatch):
         await pilot.pause()
         assert isinstance(app.screen, HelpScreen)
         assert app.screen.context == 'MainMenuScreen'
+
+
+# ---------------------- B3-2: UI no bloqueante y sondeo de procesos ---------
+
+def _screen_classes():
+    """Todas las pantallas definidas en el módulo (incluye los modales)."""
+    import inspect
+    from textual.screen import Screen
+    from tui_manager.ui import screens as s
+
+    return [obj for obj in vars(s).values()
+            if inspect.isclass(obj) and issubclass(obj, Screen)
+            and obj is not Screen and obj.__module__ == s.__name__]
+
+
+def _make_screen(cls, services):
+    """Construye una pantalla sin montarla, con argumentos plausibles."""
+    import inspect
+
+    kwargs = {}
+    for name, param in inspect.signature(cls).parameters.items():
+        if name == 'services':
+            kwargs[name] = services
+        elif name in {'message', 'prompt', 'title'}:
+            kwargs[name] = 'prueba'
+        elif name == 'options':
+            kwargs[name] = []
+        elif name == 'context':
+            kwargs[name] = 'MainMenuScreen'
+        elif param.default is inspect.Parameter.empty:
+            kwargs[name] = 'prueba'
+    return cls(**kwargs)
+
+
+def _call_names(node):
+    """Nombres cualificados de las llamadas dentro de un nodo AST."""
+    import ast
+
+    names = set()
+    for sub in ast.walk(node):
+        if not isinstance(sub, ast.Call):
+            continue
+        func = sub.func
+        if isinstance(func, ast.Attribute):
+            parts = [func.attr]
+            cur = func.value
+            while isinstance(cur, ast.Attribute):
+                parts.append(cur.attr)
+                cur = cur.value
+            if isinstance(cur, ast.Name):
+                parts.append(cur.id)
+            names.add('.'.join(reversed(parts)))
+        elif isinstance(func, ast.Name):
+            names.add(func.id)
+    return names
+
+
+# Llamadas que bloquean el hilo de la UI y métodos del core que las contienen.
+_BLOCKING_CALLS = {
+    'subprocess.run', 'subprocess.Popen', 'subprocess.call',
+    'subprocess.check_call', 'subprocess.check_output',
+    'os.system', 'os.popen',
+}
+_BLOCKING_CORE = {'get_processes', 'kill_process', 'renice_process'}
+# Callbacks de eventos y de modales que también corren en el hilo de la UI.
+_UI_CALLBACKS = {
+    'open_entry', 'search_submitted', 'filter_submitted', 'run_action',
+    'theme_changed', 'language_changed', 'interval_submitted', 'selected',
+    'on_input_submitted', '_send_signal', '_do_renice',
+}
+
+
+def test_no_sync_handler_calls_subprocess_run(tmp_path, monkeypatch):
+    """Guardia B3-2: ningún handler síncrono ejecuta subprocess/I/O lenta.
+
+    Dos capas: (1) análisis estático del AST de todos los `action_*`, `on_*`
+    y callbacks de modal; (2) ejecución dinámica de los `action_*` de todas
+    las pantallas con `subprocess.run` mockeado y vigilado.
+    """
+    import ast
+    import inspect
+    import subprocess
+    from unittest.mock import patch
+
+    from tui_manager.ui import screens as s
+
+    tree = ast.parse(inspect.getsource(s))
+    violations = []
+    for cls in (node for node in tree.body if isinstance(node, ast.ClassDef)):
+        for fn in cls.body:
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if not (fn.name.startswith(('action_', 'on_'))
+                    or fn.name in _UI_CALLBACKS):
+                continue
+            # Los handlers decorados con @work ya corren en segundo plano.
+            if any((isinstance(d, ast.Name) and d.id == 'work')
+                   or (isinstance(d, ast.Attribute) and d.attr == 'work')
+                   for d in fn.decorator_list):
+                continue
+            calls = _call_names(fn)
+            bad = calls & _BLOCKING_CALLS
+            bad |= {c for c in calls
+                    if c.rsplit('.', 1)[-1] in _BLOCKING_CORE}
+            if bad:
+                violations.append(f'{cls.name}.{fn.name}: {sorted(bad)}')
+    assert not violations, (
+        'Handlers síncronos con I/O directa (deben usar @work(thread=True)): '
+        + '; '.join(violations))
+
+    # Recorre las pantallas y sus acciones con subprocess.run bajo vigilancia.
+    # Las acciones que necesitan app montada fallan en query_one/notify, pero
+    # eso no importa: cualquier subprocess.run quedaría registrado antes.
+    services = make_services(tmp_path, monkeypatch)
+    with patch.object(subprocess, 'run') as mocked_run:
+        for cls in _screen_classes():
+            screen = _make_screen(cls, services)
+            for name in vars(cls):
+                if not name.startswith('action_'):
+                    continue
+                method = getattr(screen, name)
+                if not callable(method):
+                    continue
+                required = sum(
+                    p.default is inspect.Parameter.empty
+                    for p in inspect.signature(method).parameters.values())
+                if required:
+                    continue  # p. ej. action_quick(entry_id)
+                try:
+                    method()
+                except Exception:
+                    pass  # pantalla sin montar: no hay app ni widgets
+        assert mocked_run.call_count == 0, (
+            'subprocess.run fue invocado directamente desde un action_*')
+
+
+@pytest.mark.asyncio
+async def test_processes_polling_respects_configured_interval(
+        tmp_path, monkeypatch):
+    """B3-2: el timer de procesos usa refresh_interval de la configuración."""
+    from tui_manager.ui.screens import ProcessesScreen
+
+    services = make_services(tmp_path, monkeypatch)
+    services.config.set_refresh_interval(7)
+    intervals = []
+    original_set_interval = ProcessesScreen.set_interval
+
+    def spy_set_interval(screen, interval, callback=None, **kwargs):
+        intervals.append(interval)
+        return original_set_interval(screen, interval, callback, **kwargs)
+
+    monkeypatch.setattr(ProcessesScreen, 'set_interval', spy_set_interval)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        app.push_screen(ProcessesScreen(services))
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, ProcessesScreen)
+        # El primer timer de la pantalla es el sondeo; textual puede añadir
+        # timers internos de animación (p. ej. 1/60 s) durante `pilot.pause`.
+        assert intervals[0] == 7
+        assert screen._poll_interval == 7
+        assert screen._interval._interval == 7
+        assert screen._interval.name == 'processes-poll'
+
+
+@pytest.mark.asyncio
+async def test_processes_pause_resume_polling(tmp_path, monkeypatch):
+    """B3-2: «p» pausa y reanuda el sondeo; pausado no consulta al monitor."""
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.press('2')
+        await _wait_workers(app, pilot)
+        from tui_manager.ui.screens import ProcessesScreen
+        screen = app.screen
+        assert isinstance(screen, ProcessesScreen)
+        assert screen._paused is False
+
+        screen.action_pause()          # pausar
+        await pilot.pause()
+        assert screen._paused is True
+        assert not screen._interval._active.is_set()
+        calls_before = len(services.process_monitor.calls)
+        screen._tick()                 # aunque dispare, no debe refrescar
+        await _wait_workers(app, pilot)
+        assert len(services.process_monitor.calls) == calls_before
+
+        screen.action_pause()          # reanudar
+        await pilot.pause()
+        assert screen._paused is False
+        assert screen._interval._active.is_set()
+        await _wait_workers(app, pilot)
+        assert len(services.process_monitor.calls) > calls_before
