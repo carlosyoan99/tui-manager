@@ -144,3 +144,20 @@ Se declaran **todos** obligatorios (no es una lista de deseos, es una barrera):
 2. **Theming de escritorio: como está planificado** — solo temas internos de la TUI en Alfa 1; escritorio completo (terminal/GTK/bar/wallpaper) en Beta 1.
 3. **BSD: FreeBSD primero** en Alfa 2; OpenBSD/NetBSD post-1.0.
 4. **Nombre: `tui-manager`** para PyPI y comando de CLI.
+5. **i18n (es/en) desde Alfa 1.**
+6. **Funciones nuevas adoptadas de la investigación de Omarchy** (2026-11-18):
+   - **Al roadmap actual** (simples, bajo costo): A · Launch-or-focus (Alfa 2), B · Info del sistema «Acerca de» (Alfa 2), E · Visor de logs de la app dentro de la TUI (Alfa 2).
+   - **Al backlog futuro** (complejas, fuera del roadmap): C · Stacks recomendados, D · fwupd, F · snapshots extendidos de configs del WM, G · Webapps, H · Integración agéntica, I · capacidades de hardware (hibernación/screensaver).
+
+## Backlog — funciones planeadas a futuro (post-1.0)
+
+Funciones adoptadas de la investigación de Omarchy pero **complejas**: se planifican a futuro, sin entrar al roadmap de fases actual. Se priorizarán solo después de 1.0 estable, y cada una entrará al roadmap con sus propios criterios.
+
+| # | Función | Origen Omarchy | Idea para TUI Manager |
+|---|---|---|---|
+| C | Stacks recomendados | menú Install (dev-env, gaming, navegadores) | Catálogo YAML portátil de apps por rol (editor, terminal, navegador, dev) |
+| D | Actualización de firmware | `omarchy-update-firmware` | `fwupdmgr` si está presente (opcional) |
+| F | Snapshots extendidos | `omarchy-snapshot` | Backup/restore de configs del WM y bar; nunca snapshots de sistema (btrfs/zfs) |
+| G | Webapps | `omarchy-webapp-install` | Sitios como apps dedicadas vía navegador del entorno |
+| H | Integración agéntica | Omarchy 4 (agentes) | CLI estructurada y amigable para agentes de IA |
+| I | Capacidades de hardware | `omarchy-toggle-*`, hibernación, screensaver | Cada capacidad vive o muere según el `EnvironmentAdapter`; nada asumido |

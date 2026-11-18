@@ -28,6 +28,8 @@ Objetivo de la versión: la TUI arranca y hace bien tres cosas (paquetes, proces
 - BSD: **FreeBSD primero** (Alfa 2); OpenBSD/NetBSD post-1.0.
 - Theming de escritorio (terminal/GTK/bar/wallpaper) recién en **Beta 1**; Alfa 1 solo temas internos de la TUI.
 - Soporte **limitado** a Termux/Android incluido en Alfa 1.
+- i18n (es/en) desde Alfa 1.
+- Funciones nuevas de Omarchy adoptadas: al roadmap A · Launch-or-focus, B · Info del sistema, E · Visor de logs (Alfa 2); al backlog futuro C/D/F/G/H/I (complejas, fuera del roadmap actual). Ver docs/ROADMAP.md «Backlog».
 
 ### Cambiado
 - `requirements.txt` limpiado: solo `textual`, `pyyaml`, `python-json-logger` + dev. Los bindings nativos (`python-apt`, `pyalpm`, `pydnf`, `xbps-python`) se eliminaron — verificado que los adaptadores usan subprocesos puros.
