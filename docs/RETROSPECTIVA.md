@@ -54,6 +54,11 @@
 
 **Ampliar a 4 agentes**, no a 5.
 
+> Actualización 2026-11-18: el roadmap pasó de 2 a **3 betas**. Se añadió Beta 3
+> (`0.7.x`) para ejecutar rendimiento, estabilidad multiplataforma, animaciones,
+> notificaciones nativas y procesos en segundo plano — todo lo que 1.0 exige pero
+> no implementa. Ver `docs/PLAN-BETA3.md`.
+
 | Agente | Rol en Beta 1 |
 |---|---|
 | 1. Arquitecto | Plan de Beta 1 (pulido e integración, el 10 % restante) |

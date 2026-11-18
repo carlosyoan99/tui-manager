@@ -166,11 +166,48 @@ Trabajo:
 
 ---
 
+## Fase Beta 3 — `0.7.x` «Rendimiento, estabilidad y experiencia»
+
+**Objetivo**: hacer realidad los criterios de rendimiento y robustez que 1.0 solo
+declara. Sin funciones nuevas: optimiza, estabiliza y pulsa la experiencia en
+plataformas y entornos reales.
+
+Trabajo:
+- [ ] **Rendimiento**: arranque < 2 s; refresco de procesos < 500 ms; paginación
+      real de listas de paquetes (5000+); caché de `get_installed_packages` con
+      invalidación; mediciones automáticas en tests de rendimiento.
+- [ ] **Procesos en segundo plano**: Workers de textual para todo I/O largo;
+      sondeo de procesos con intervalo configurable y pausa; sin bloqueos de UI.
+- [ ] **Animaciones y feedback**: `LoadingIndicator` en todas las acciones con
+      I/O; transiciones suaves entre pantallas; estados de progreso para
+      instalaciones yactualizaciones; respeto a `prefers-reduced-motion`.
+- [ ] **Notificaciones nativas donde haga falta**: `notify-send` (Linux/DE),
+      `terminal-notifier`/`osascript` (futuro macOS), y fallback a notify
+      interna de textual; solo si la herramienta existe (degradación elegante).
+- [ ] **Estabilidad multiplataforma**: sesión guiada en Debian, Arch, Fedora,
+      Void, FreeBSD y Termux; ≥ 3 WMs tiling, ≥ 1 apilable y ≥ 2 DEs con
+      degradación verificada; CI verde en Linux + FreeBSD.
+- [ ] **Robustez**: sesión de 2 h sin traceback; ≥ 80 % de cobertura en `core`;
+      timeout y reintentos en subprocess; logs de auditoría sin credenciales.
+
+**Criterios de salida:**
+1. Arranque < 2 s y refresco de procesos < 500 ms medidos en hardware modesto
+   (≤ 8 GB RAM), con test automatizado de regresión de rendimiento.
+2. Lista de 5000+ paquetes navegable con paginación y respuesta inmediata.
+3. Ninguna llamada a subprocess bloquea el hilo de la UI (verificado con tests).
+4. Animaciones y notificaciones degradan limpiamente si el entorno no las soporta.
+5. Checklist `tests/manual-checklist.md` ejecutado sin errores en ≥ 5 plataformas
+   y ≥ 3 WMs; CI verde en Linux + FreeBSD.
+
+---
+
 ## 1.0 Estable
 
 ### Criterios para declarar 1.0 estable
 
-Se declaran **todos** obligatorios (no es una lista de deseos, es una barrera):
+Se declaran **todos** obligatorios (no es una lista de deseos, es una barrera).
+**Nota (2026-11-18):** 1.0 no añade optimizaciones; los criterios de rendimiento
+y estabilidad se ejecutan en **Beta 3** y aquí solo se verifican.
 
 **Funcionalidad**
 1. Los 6 menús principales (Aplicaciones, Procesos, Sistema, Temas, Actualizar, Ajustes) completos y operativos.
@@ -208,12 +245,15 @@ Se declaran **todos** obligatorios (no es una lista de deseos, es una barrera):
 3. **BSD: FreeBSD primero** en Alfa 2; OpenBSD/NetBSD post-1.0.
 4. **Nombre: `tui-manager`** para PyPI y comando de CLI.
 5. **i18n (es/en) desde Alfa 1.**
-6. **Funciones nuevas adoptadas de la investigación de Omarchy** (2026-11-18, A–I completas, en el roadmap):
+6. **Beta 3 añadida (2026-11-18)**: rendimiento, estabilidad multiplataforma,
+   animaciones, notificaciones nativas, procesos en segundo plano y feedback de
+   progreso. Necesaria porque 1.0 exige métricas que ninguna fase ejecutaba.
+7. **Funciones nuevas adoptadas de la investigación de Omarchy** (2026-11-18, A–I completas, en el roadmap):
    - **Alfa 2**: A · Launch-or-focus, B · Info del sistema «Acerca de», E · Visor de logs.
    - **Alfa 3**: catálogo base de apps y fuentes alternativas (179 apps / 29 categorías).
    - **Beta 2**: C · Stacks recomendados, D · fwupd opcional, F · Snapshots extendidos (configs del WM). *(Corrección 2026-11-18: originalmente asignados a Beta 1, se difieren porque Beta 1 no añade funciones nuevas y C/F figuraban en Alfa 4.)*
    - **Post-1.0 planeado**: G · Webapps, H · Integración agéntica, I · Capacidades de hardware.
-7. **Soporte macOS y Windows planificado para la versión 2.0** (no en 1.0): macOS vía Homebrew y `defaults`/`osascript`; Windows vía winget/scoop/choco y `tasklist`/`taskkill`. Ver fase «2.0» en este roadmap.
+8. **Soporte macOS y Windows planificado para la versión 2.0** (no en 1.0): macOS vía Homebrew y `defaults`/`osascript`; Windows vía winget/scoop/choco y `tasklist`/`taskkill`. Ver fase «2.0» en este roadmap.
 
 ## Post-1.0 — fase planeada (G · H · I)
 
