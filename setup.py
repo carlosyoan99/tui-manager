@@ -10,8 +10,13 @@ from pathlib import Path
 def read_requirements():
     requirements = []
     with open('requirements.txt', 'r') as f:
+        in_dev = False
         for line in f:
             line = line.strip()
+            if line.startswith('#') and 'Desarrollo' in line:
+                in_dev = True  # el resto del archivo es tooling de desarrollo
+            if in_dev:
+                continue
             if line and not line.startswith('#') and not line.startswith('-'):
                 requirements.append(line)
     return requirements
@@ -25,8 +30,8 @@ def read_readme():
 
 setup(
     name='tui-manager',
-    version='0.1.0',
-    description='Gestor de paquetes y monitoreo de procesos TUI para Linux',
+    version='0.2.0a2',
+    description='Panel de control portable para la terminal: paquetes, procesos, sistema y temas (Linux, BSD, Termux)',
     author='Tu Nombre',
     author_email='tu-email@ejemplo.com',
     url='https://github.com/tu-usuario/TUI-Manager',
