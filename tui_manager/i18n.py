@@ -270,6 +270,9 @@ STRINGS: dict[str, dict[str, str]] = {
     'about.session': 'Sesión',
     'about.displays': 'Pantallas',
     'about.gpu': 'Gráfica',
+    'apps.mark': 'Marcar (Espacio)',
+    'apps.install_batch_confirm': '¿Instalar',
+    'apps.install_batch_ok': '{ok}/{total} aplicaciones instaladas',
     },
 
     'en': {
@@ -522,6 +525,9 @@ STRINGS: dict[str, dict[str, str]] = {
     'about.session': 'Session',
     'about.displays': 'Displays',
     'about.gpu': 'GPU',
+    'apps.mark': 'Mark (Space)',
+    'apps.install_batch_confirm': 'Install',
+    'apps.install_batch_ok': '{ok}/{total} apps installed',
     },
 }
 

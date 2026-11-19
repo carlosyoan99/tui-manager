@@ -1634,6 +1634,7 @@ class AppsScreen(Screen):
 
     BINDINGS = [
         ('enter', 'install', t('common.install')),
+        ('space', 'toggle_mark', t('apps.mark')),
         ('c', 'category', t('apps.category')),
         ('f', 'filter', t('common.search')),
         Binding('/', 'filter', show=False),
@@ -1648,6 +1649,8 @@ class AppsScreen(Screen):
         self._apps = []
         self._category = 'all'
         self._query = ''
+        self._marked = set()
+        self._installed = set()
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -1666,8 +1669,8 @@ class AppsScreen(Screen):
     def on_mount(self) -> None:
         table = self.query_one('#apps-table', DataTable)
         table.cursor_type = 'row'
-        table.add_columns(t('common.name'), t('apps.category'),
-                          t('apps.sources'), t('common.description'))
+        table.add_columns(t('apps.mark'), t('common.name'), t('common.installed'),
+                          t('apps.category'), t('apps.sources'), t('common.description'))
         table.focus()
         self.query_one('#apps-loading', LoadingIndicator).display = True
         self._reload()
@@ -1676,12 +1679,13 @@ class AppsScreen(Screen):
         self._apps = self.adapter.list_apps(self._category, self._query)
         table = self.query_one('#apps-table', DataTable)
         table.clear()
+        self._load_installed()
         for app in self._apps:
-            table.add_row(app.name, app.category,
+            mark = '✓' if app.name in self._marked else ''
+            installed = '✓' if app.name in self._installed else ''
+            table.add_row(mark, app.name, installed, app.category,
                           self.adapter.source_summary(app), app.description)
-        self.query_one('#apps-status', Static).update(_status(
-            f'{len(self._apps)} apps — {t("apps.category")}: {self._category}',
-            empty=not self._apps))
+        self._update_status()
         try:
             self.query_one('#apps-loading', LoadingIndicator).display = False
         except Exception:
@@ -1714,16 +1718,57 @@ class AppsScreen(Screen):
     def action_back(self) -> None:
         self.app.pop_screen()
 
+    def _load_installed(self) -> None:
+        """Nombres instalados para marcar la columna (solo lectura, best-effort)."""
+        try:
+            pm = self.services.package_manager
+            self._installed = {p.name for p in pm.get_installed_packages(
+                use_cache=True, limit=5000)}
+        except Exception:
+            self._installed = set()
+
+    def action_toggle_mark(self) -> None:
+        app = self._selected_app()
+        if not app:
+            return
+        if app.name in self._marked:
+            self._marked.discard(app.name)
+        else:
+            self._marked.add(app.name)
+        table = self.query_one('#apps-table', DataTable)
+        row = table.cursor_row
+        table.update_cell(row, 0, '✓' if app.name in self._marked else '')
+        self._update_status()
+
+    def _update_status(self) -> None:
+        extra = f' · {len(self._marked)} marcadas' if self._marked else ''
+        self.query_one('#apps-status', Static).update(_status(
+            f'{len(self._apps)} apps — {t("apps.category")}: '
+            f'{self._category}{extra}', empty=not self._apps))
+
     def _selected_app(self):
         table = self.query_one('#apps-table', DataTable)
         if 0 <= table.cursor_row < len(self._apps):
             return self._apps[table.cursor_row]
         return None
 
-    def action_install(self) -> None:
+    def _target_apps(self):
+        if self._marked:
+            return [a for a in self._apps if a.name in self._marked]
         app = self._selected_app()
-        if not app:
+        return [app] if app else []
+
+    def action_install(self) -> None:
+        targets = self._target_apps()
+        if not targets:
             return
+        if len(targets) > 1:
+            self.app.push_screen(
+                ConfirmScreen(f'{t("apps.install_batch_confirm")} '
+                              f'{len(targets)}?'),
+                lambda ok: self._install_batch(targets) if ok else None)
+            return
+        app = targets[0]
         sources = self.adapter.sources_for(app)
         if not sources:
             self.notify(t('apps.no_sources'), severity='warning')
@@ -1739,6 +1784,27 @@ class AppsScreen(Screen):
                 SelectScreen(t('apps.source_choose'), options, hints),
                 lambda idx: self._source_chosen(app, sources, idx),
             )
+
+    @work(thread=True, exclusive=False)
+    def _install_batch(self, targets) -> None:
+        self.app.call_from_thread(
+            lambda: setattr(self.query_one('#apps-loading', LoadingIndicator),
+                            'display', True))
+        ok_count = 0
+        for app in targets:
+            try:
+                sources = self.adapter.sources_for(app)
+                if not sources:
+                    continue
+                result = self.adapter.install(app, sources[0])
+                ok_count += int(result.ok)
+            except Exception:
+                logger.exception('instalación por lote falló: %s', app.name)
+        self.app.call_from_thread(self.notify,
+                                  t('apps.install_batch_ok').format(
+                                      ok=ok_count, total=len(targets)))
+        self.app.call_from_thread(self._reload)
+        self.app.call_from_thread(self._marked.clear)
 
     def _source_chosen(self, app, sources, idx) -> None:
         if idx is None:
