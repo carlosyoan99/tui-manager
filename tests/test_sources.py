@@ -390,3 +390,16 @@ def test_install_result_bool_keeps_existing_callers():
     ok = InstallResult(True, 'app', 'repo', 0)
     bad = InstallResult(False, 'app', 'repo', 1, error='x')
     assert ok and not bad
+
+
+def test_repo_available_with_alternative_manager_binary(monkeypatch):
+    """Void tiene xbps-query, no xbps: la fuente repo debe seguir disponible."""
+    import tui_manager.core.alternative_sources as mod
+    monkeypatch.setattr(
+        mod.shutil, 'which',
+        lambda tool, *a, **k: '/usr/bin/xbps-query' if tool == 'xbps-query' else None)
+
+    mgr = AlternativeSourceManager(package_manager='xbps')
+    assert mgr.get_available_tools()['repo'] is True
+    sources = mgr.build_sources(get_app_by_name('firefox'))
+    assert any(s.type == 'repo' for s in sources)

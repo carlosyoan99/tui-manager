@@ -80,6 +80,21 @@ class AlternativeSourceManager:
                          (mensaje: str, opciones: List[str]) -> str.
     """
 
+    # Binarios reales por gestor: en Void no existe `xbps`, sino `xbps-query`
+    # y `xbps-install`. Detectar solo el nombre lógico dejaba sin fuente repo.
+    MANAGER_BINARIES = {
+        'apt': ('apt', 'apt-get'),
+        'pacman': ('pacman',),
+        'dnf': ('dnf',),
+        'xbps': ('xbps', 'xbps-query', 'xbps-install'),
+        'pkg': ('pkg',),
+        'pkgin': ('pkgin',),
+        'pkg_add': ('pkg_add',),
+        'emerge': ('emerge',),
+        'zypper': ('zypper',),
+        'apk': ('apk',),
+    }
+
     SOURCE_LABELS = {
         'repo': 'Repositorio oficial',
         'github': 'GitHub (código fuente / release)',
@@ -153,7 +168,10 @@ class AlternativeSourceManager:
                 manager = DistributionDetector.get_package_manager()
             except Exception:
                 manager = None
-        return bool(manager) and manager != 'unknown' and self.tool_available(manager)
+        if not manager or manager == 'unknown':
+            return False
+        binaries = self.MANAGER_BINARIES.get(manager, (manager,))
+        return any(self.tool_available(binary) for binary in binaries)
 
     def get_available_tools(self) -> Dict[str, bool]:
         """Obtiene qué herramientas de instalación están realmente disponibles."""
