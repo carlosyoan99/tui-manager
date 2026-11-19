@@ -447,7 +447,7 @@ class PackagesScreen(Screen):
         finally:
             # Un solo aviso y una sola recarga para todo el lote: las marcas
             # ya no aplican después de la acción.
-            self.app.call_from_thread(self._marked.clear)
+            self.app.call_from_thread(lambda: self._marked.clear())
             self._fetch_installed()
 
     def action_info(self) -> None:
@@ -1829,7 +1829,7 @@ class AppsScreen(Screen):
                                   t('apps.install_batch_ok').format(
                                       ok=ok_count, total=len(targets)))
         self.app.call_from_thread(self._reload)
-        self.app.call_from_thread(self._marked.clear)
+        self.app.call_from_thread(lambda: self._marked.clear())
 
     def _source_chosen(self, app, sources, idx) -> None:
         if idx is None:

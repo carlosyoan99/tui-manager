@@ -37,9 +37,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          # Plugin de los tests asíncronos de la UI (presente en el venv local).
-          python -m pip install pytest-asyncio
+          # Solo dependencias de runtime + tests: requirements.txt incluye
+          # tooling de desarrollo (mypy → maturin/Rust) que no compila en FreeBSD.
+          python -m pip install textual pyyaml python-json-logger pytest pytest-asyncio pytest-cov
           python -m pip install -e .
 
       # 1.2-D: comprobación de sintaxis además de la suite de tests.
@@ -72,8 +72,7 @@ jobs:
             python3.11 -m venv .venv
             . .venv/bin/activate
             python -m pip install --upgrade pip
-            python -m pip install -r requirements.txt
-            python -m pip install pytest-asyncio
+            python -m pip install textual pyyaml python-json-logger pytest pytest-asyncio pytest-cov
             python -m pip install -e .
             # 1.2-D: comprobación de sintaxis además de la suite de tests.
             python -m compileall -q tui_manager
