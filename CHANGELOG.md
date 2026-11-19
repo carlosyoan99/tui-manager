@@ -4,6 +4,25 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ---
 
+## [1.2.0] — 2026-11-19 — Onboarding, JSON y comunidad
+
+### Agregado
+- `--quickstart`: recorrido guiado por las 10 entradas, reutilizando el menú
+  como fuente única; sugiere `tm --doctor`.
+- `--json packages|processes|doctor`: salida estructurada para scripts/agentes,
+  con errores a stderr y exit codes; `collect_doctor_data()` es fuente única
+  compartida con `--doctor`.
+- CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md y docs/DEMO.md.
+- Badge de CI en README y paso `compileall` en el workflow.
+
+### Validación
+- **379 tests verdes**, JSON verificado con `json.load`, YAML válido.
+
+### Nota
+- CI en GitHub no ejecutada (requiere permiso). FreeBSD validado por simulación.
+
+---
+
 ## [1.1.0] — 2026-11-19 — Interfaz, lote, orden y tema dinámico (completada)
 
 ### Agregado

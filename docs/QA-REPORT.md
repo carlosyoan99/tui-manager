@@ -229,3 +229,19 @@ sigue siendo tema de Noctalia; el Select de la TUI solo afecta a textual.
 > `gpu`) se debían a que los tests no neutralizaban `PREFIX` de Termux; corregido
 > en `c73a8ba`. El catálogo incorpora marcas con Espacio, columna «Instalado» e
 > instalación por lote (`382e742`).
+
+---
+
+# QA-REPORT — 1.2 (onboarding, JSON y comunidad)
+
+**Fecha:** 2026-11-19 · **Suite:** 379 tests verdes.
+
+| Subtarea | Estado |
+|---|---|
+| 1.2-A `--quickstart` (10 entradas, sugiere `tm --doctor`, --lang) | ✅ 10 tests |
+| 1.2-B `--json packages|processes|doctor` (JSON limpio, errores a stderr) | ✅ 8 tests, JSON verificado |
+| 1.2-C CONTRIBUTING/SECURITY/CODE_OF_CONDUCT sin placeholders | ✅ |
+| 1.2-D CI con compileall, badge y DEMO.md | ✅ YAML válido |
+
+**Nota:** la ejecución de CI en GitHub requiere permiso explícito; no se ejecutó.
+> ## ✅ 1.2 — ACEPTAR (pendiente replicar en 4 hosts)
