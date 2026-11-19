@@ -42,6 +42,10 @@ jobs:
           python -m pip install pytest-asyncio
           python -m pip install -e .
 
+      # 1.2-D: comprobación de sintaxis además de la suite de tests.
+      - name: Compile sources
+        run: python -m compileall -q tui_manager
+
       - name: Run tests
         run: python -m pytest -q
 
@@ -71,4 +75,6 @@ jobs:
             python -m pip install -r requirements.txt
             python -m pip install pytest-asyncio
             python -m pip install -e .
+            # 1.2-D: comprobación de sintaxis además de la suite de tests.
+            python -m compileall -q tui_manager
             python -m pytest -q

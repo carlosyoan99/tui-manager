@@ -1,5 +1,6 @@
 # TUI Manager
 
+[![CI](https://github.com/carlosyoan99/tui-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/carlosyoan99/tui-manager/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20BSD-lightgrey.svg)](https://www.linux.org/)
@@ -98,6 +99,17 @@ Su propósito: desde un solo menú jerárquico, navegable 100 % por teclado, pod
 - [Especificaciones Técnicas](docs/TECHNICAL_SPECS.md)
 - [Roadmap y plan por fases](docs/ROADMAP.md)
 - [Resumen del proyecto](PROJECT_SUMMARY.md)
+
+## Comunidad
+
+- [Contribuir](CONTRIBUTING.md) — entorno de desarrollo, estilo y proceso de PR.
+- [Seguridad](SECURITY.md) — cómo reportar vulnerabilidades de forma privada.
+- [Código de Conducta](CODE_OF_CONDUCT.md) — estándares de convivencia y reportes.
+- [Demo visual](docs/DEMO.md) — guion para grabar con `vhs` o `asciinema`.
+
+El repositorio oficial es [carlosyoan99/tui-manager](https://github.com/carlosyoan99/tui-manager).
+El estado de la CI se muestra en el badge de arriba, que apunta al
+[workflow real](https://github.com/carlosyoan99/tui-manager/actions/workflows/ci.yml).
 
 ## Estructura del proyecto
 
