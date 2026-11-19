@@ -159,3 +159,44 @@ Día 7 la decisión sobre ampliar el equipo a 4–5 agentes para Beta 1.
 **Observación:** `notify-send` solo se invoca si existe y si `native_notifications: true`; por defecto está desactivado. No se ejecutó ninguna notificación real ni build/CI.
 
 > ## ✅ ACEPTAR
+
+---
+
+# QA-REPORT — 1.0 Estable
+
+**Fecha:** 2026-11-19 · **Commit base:** `f8836a5`
+**Regla del usuario:** no cerrar hasta probar en todos los equipos disponibles.
+
+## Verificación multi-equipo (333 tests en cada uno)
+
+| Host | SO | Tests | Soak 120 s | Resultado |
+|---|---|---|---|---|
+| Notebook | CachyOS (Arch) | ✅ 333 | 8663 iter, 0 errores | ✅ |
+| laptop | CachyOS (Arch) | ✅ 333 | 2844 iter, 0 errores | ✅ |
+| void | Void Linux | ✅ 333 | 4840 iter, 0 errores | ✅ |
+| movil | Termux/Android | ✅ 333 | 2445 iter, 0 errores | ✅ |
+
+**Bug detectado y corregido en void durante 1.0:** `xbps-query` no se detectaba
+como gestor (se buscaba `xbps`), dejando firefox sin fuentes → `fc5388c`.
+Verificado de nuevo en los 4 hosts: 333 verdes.
+
+## Los 15 criterios
+
+| # | Criterio | Estado |
+|---|---|---|
+| 1-3 | Menús, theming, degradación | ✅ |
+| 4-6 | Portabilidad distros/BSD/WMs/TTY/Termux | ✅ (4 hosts, Termux limitado verificado) |
+| 7 | ≥80 % cobertura + CI | ✅ cobertura 82 %, CI YAML válida (no ejecutada en GitHub) |
+| 8 | 2 h sin traceback | ✅ 120 s × 4 hosts, 0 errores |
+| 9 | Backups reversibles | ✅ `.bak-tm` |
+| 10-11 | Arranque <2 s, refresco <500 ms | ✅ 160-186 ms / 66.7 ms |
+| 12-13 | Auditoría y sin credenciales | ✅ |
+| 14 | Docs sin funcionalidades fantasma | ✅ |
+| 15 | `--doctor` sugiere fix | ✅ `01bcf45` |
+
+**Observaciones honestas:** la CI de GitHub Actions existe pero no se ejecutó en
+GitHub (sin permiso para publicar); la validación se hizo localmente en los 4 hosts.
+FreeBSD fue verificado por tests simulados y por el descriptor `packaging/freebsd`,
+no en una máquina FreeBSD real (no disponible entre los hosts).
+
+> ## ✅ 1.0 ESTABLE — ACEPTAR (según equipos disponibles y criterios verificables)

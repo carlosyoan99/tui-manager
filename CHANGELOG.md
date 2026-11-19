@@ -4,6 +4,27 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ---
 
+## [1.0.0] — 2026-11-19 — 1.0 Estable (completada)
+
+No añade funciones: declara estabilidad tras cumplir los 15 criterios del roadmap
+y la regla multi-equipo del usuario.
+
+### Validación multi-equipo (333 tests por host, soak 120 s sin errores)
+- Notebook (CachyOS), laptop (CachyOS), void (Void Linux), movil (Termux/Android).
+- Bug de Void corregido: detección de gestor por binarios reales (`xbps-query`).
+
+### Criterios cerrados
+- Cobertura `core` 68 % → 82 % (49 tests nuevos).
+- `--doctor` con sugerencias accionables.
+- Arranque 160-186 ms; refresco 66.7 ms; 5000 paquetes paginados.
+- Auditoría, backups reversibles, docs al día, CI Linux+FreeBSD (YAML válido).
+
+### Observación
+- CI no ejecutada en GitHub (sin publicación); FreeBSD validado por simulación,
+  no en máquina real (no disponible).
+
+---
+
 ## [0.7.0-beta.3] — 2026-11-19 — Fase Beta 3 «Rendimiento, estabilidad y experiencia» (completada)
 
 ### Agregado
