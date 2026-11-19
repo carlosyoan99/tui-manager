@@ -247,7 +247,12 @@ STRINGS: dict[str, dict[str, str]] = {
     'apps.install_cancel': 'Instalación cancelada',
     'apps.no_sources': 'Sin fuentes disponibles en este sistema',
     'apps.preferred': 'Formato preferido',
+    'doctor.fix.title': 'Sugerencias para resolver los avisos:',
+    'doctor.fix.distro': 'No se detectó el SO: revisa /etc/os-release o instala lsb-release.',
+    'doctor.fix.cli': 'Falta una CLI del gestor: instálala con el gestor de tu distro (ej. pacman -S pacman, apt install apt).',
+    'doctor.fix.textual': 'Instala la dependencia TUI: pip install textual (o pip install -r requirements.txt).',
     },
+
     'en': {
         'app.title': 'TUI Manager',
         'app.subtitle': 'Portable control panel (Omarchy-inspired)',
@@ -473,6 +478,11 @@ STRINGS: dict[str, dict[str, str]] = {
     'apps.install_cancel': 'Installation cancelled',
     'apps.no_sources': 'No sources available on this system',
     'apps.preferred': 'Preferred format',
+
+    'doctor.fix.title': 'Suggestions to resolve warnings:',
+    'doctor.fix.distro': 'OS not detected: check /etc/os-release or install lsb-release.',
+    'doctor.fix.cli': 'A package-manager CLI is missing: install it with your distro manager (e.g. apt install apt).',
+    'doctor.fix.textual': 'Install the TUI dependency: pip install textual (or pip install -r requirements.txt).',
 
     },
 }

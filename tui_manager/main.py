@@ -114,8 +114,10 @@ def run_doctor() -> str:
 
     # Versiones de CLIs (B2-2): únicamente `<cli> --version`, sin efectos
     # en el sistema. Las ausentes se degradan a «N/D» con estado de aviso.
+    cli_versions = {}
     for cli in CLI_VERSION_COMMANDS:
         version = _cli_version(cli)
+        cli_versions[cli] = version
         add(cli, version, warn=version == 'N/D')
 
     add(t('doctor.sudo'), shutil.which('sudo') or 'no (root directo/termux)',
@@ -132,6 +134,27 @@ def run_doctor() -> str:
     exists = __import__('os').path.exists(config.config_file)
     add(t('doctor.cfg'), f'{config.config_file} '
         f'({"sí" if exists else "no (defaults)"})')
+
+    # Criterio 15 de 1.0: além de informar, Sugerir el fix concreto.
+    suggestions = []
+    if distro is None:
+        suggestions.append('doctor.fix.distro')
+    for cli in CLI_VERSION_COMMANDS:
+        if cli_versions.get(cli) == 'N/D':
+            suggestions.append('doctor.fix.cli')
+            break
+    try:
+        import textual  # noqa: F401
+    except Exception:
+        suggestions.append('doctor.fix.textual')
+    if suggestions:
+        lines.append('')
+        lines.append(t('doctor.fix.title'))
+        seen = set()
+        for key in suggestions:
+            if key not in seen:
+                seen.add(key)
+                lines.append(f'  - {t(key)}')
     return '\n'.join(lines)
 
 
