@@ -615,9 +615,15 @@ def test_sysinfo_device_name_termux(monkeypatch):
     assert si.collect(runner=_no_subprocess, pm_name='pkg')['device_name']
 
 
+def _not_termux(monkeypatch):
+    """Neutraliza la detección de Termux (vars y PREFIX) para tests multi-SO."""
+    monkeypatch.delenv('TERMUX_VERSION', raising=False)
+    monkeypatch.setenv('PREFIX', '/usr')
+
+
 def test_sysinfo_device_type(monkeypatch, tmp_path):
     import tui_manager.core.sysinfo as si
-    monkeypatch.delenv('TERMUX_VERSION', raising=False)
+    _not_termux(monkeypatch)
 
     vm = _ScriptedRunner({('systemd-detect-virt',): (0, 'kvm\n', '')})
     assert si.collect(runner=vm, pm_name='x')['device_type'] == 'VM'
@@ -638,7 +644,7 @@ def test_sysinfo_device_type(monkeypatch, tmp_path):
 
 def test_sysinfo_gpu_sources(monkeypatch):
     import tui_manager.core.sysinfo as si
-    monkeypatch.delenv('TERMUX_VERSION', raising=False)
+    _not_termux(monkeypatch)
 
     lspci = _ScriptedRunner({('lspci',): (0,
         '00:02.0 VGA compatible controller: Intel Corporation UHD Graphics 620\n'
