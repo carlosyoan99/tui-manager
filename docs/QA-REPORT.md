@@ -244,4 +244,8 @@ sigue siendo tema de Noctalia; el Select de la TUI solo afecta a textual.
 | 1.2-D CI con compileall, badge y DEMO.md | ✅ YAML válido |
 
 **Nota:** la ejecución de CI en GitHub requiere permiso explícito; no se ejecutó.
-> ## ✅ 1.2 — ACEPTAR (pendiente replicar en 4 hosts)
+> ## ✅ 1.2 — ACEPTAR
+>
+> Replicado y verificado en los 4 hosts en `5d27f49`: notebook, laptop, void y
+> móvil, **379 tests verdes en cada uno**. La CI en GitHub sigue sin ejecutarse
+> (requiere permiso explícito del usuario).
