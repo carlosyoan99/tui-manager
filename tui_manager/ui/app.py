@@ -116,6 +116,15 @@ class TuiManagerApp(App):
         self.services = services or Services.detect()
         self._register_themes()
 
+    def notify_native(self, title: str, message: str) -> None:
+        """Notificación nativa opcional (config `native_notifications`)."""
+        try:
+            if self.services.config.get('native_notifications', False):
+                from tui_manager.ui.notifications import notify as native_notify
+                native_notify(title, message)
+        except Exception:
+            logger.debug('notificación nativa omitida', exc_info=True)
+
     def _register_themes(self):
         """Registra los temas internos como temas de textual."""
         for name in self.services.theme_manager.THEMES:

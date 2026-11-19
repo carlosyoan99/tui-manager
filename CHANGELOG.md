@@ -4,6 +4,28 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ---
 
+## [0.7.0-beta.3] — 2026-11-19 — Fase Beta 3 «Rendimiento, estabilidad y experiencia» (completada)
+
+### Agregado
+- **B3-1**: `core/perf.py` con `measure_call`, `paginate` y `PackageCache`;
+  `get_installed_packages`/`get_processes` con `offset`/`limit` y caché
+  invalidada automáticamente tras install/remove/update_cache.
+- **B3-2**: 76 handlers auditados (0 I/O síncrono); kill/renice delegados a
+  workers; guardia AST que falla si un `action_*` llama a subprocess; sondeo
+  de procesos pausable con intervalo configurable.
+- **B3-3**: `ui/notifications.py` con `notify()` (notify-send con fallback,
+  nunca instala), `progress_animation()` y `reduced_motion_enabled()`;
+  bandera `native_notifications: false` por defecto en la config.
+- **B3-4**: CI de GitHub Actions en Linux + FreeBSD y checklist con medición
+  de arranque/refresco.
+
+### Validación
+- **283 tests verdes**, py_compile OK, smoke y `--doctor` correctos.
+- Arranque real medido: 160–186 ms (objetivo < 2 s).
+- 5000 paquetes: carga 0.323 ms, paginación 0.802 ms, caché hits=50/misses=1.
+
+---
+
 ## [0.6.0-beta.2] — 2026-11-18 — Fase Beta 2 «Portabilidad y distribución» (completada)
 
 ### Agregado

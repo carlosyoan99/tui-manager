@@ -16,3 +16,6 @@ default_package_manager: null  # forzar gestor (debian|arch|fedora|void|termux|f
 # Fuente preferida para instalar apps del catálogo:
 # auto | repo | github | flatpak | snap | appimage
 preferred_install_method: auto
+
+# Notificaciones nativas del escritorio (notify-send). Requiere herramienta instalada.
+native_notifications: false

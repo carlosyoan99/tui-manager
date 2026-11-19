@@ -128,3 +128,34 @@ Día 7 la decisión sobre ampliar el equipo a 4–5 agentes para Beta 1.
 **Observación:** `pacman --version` imprime arte ASCII; el helper toma la primera línea con dígitos y funciona correctamente. Los CLI no instalados muestran «N/D [AVISO]» sin fallar.
 
 > ## ✅ ACEPTAR
+
+---
+
+# QA-REPORT — Beta 3 (0.7.x) «Rendimiento, estabilidad y experiencia»
+
+**Verificador:** Agente 4 · **Rango:** `69d9da0..worktree` · **Fecha:** 2026-11-19
+
+| Subtarea | Commit | Tests | py_compile | Estado |
+|---|---|---|---|---|
+| B3-1 caché/paginación/benchmarks | `ae6312f` | 17 perf + 48 core | OK | ACEPTAR |
+| B3-2 workers no bloqueantes | `5fd793a` | 51 UI | OK | ACEPTAR |
+| B3-3 notificaciones/animaciones | `0fcce4a` | 30 notifications | OK | ACEPTAR |
+| B3-4 CI + checklist | `69d9da0` | YAML válido | OK | ACEPTAR |
+| B3-5 integración + verificación | — | **283 passed**, 0 fallos | OK | ACEPTAR |
+
+**Métricas reales medidas en esta notebook (CachyOS, Python 3.14):**
+- Arranque `--version`: **160.0 / 179.1 / 185.9 ms** (objetivo < 2000 ms). ✅
+- 5000 paquetes simulados: carga 0.323 ms, paginación 0.802 ms, caché hits=50/misses=1. ✅
+- Parseo de 5000 líneas `ps aux` + ventana de 100: 66.7 ms. ✅
+- 76 handlers auditados, 0 llamadas síncronas a subprocess en la UI. ✅
+
+**Criterios de salida:**
+1. Arranque <2 s y refresco <500 ms. ✅ medido
+2. 5000+ paquetes paginados. ✅ benchmarks y tests
+3. Ningún subprocess bloquea la UI. ✅ guardia AST + workers
+4. Animaciones/notificaciones degradan limpiamente. ✅ 30 tests, bandera `native_notifications` default false
+5. CI Linux+FreeBSD y checklist de medición. ✅ workflow YAML válido (no ejecutado)
+
+**Observación:** `notify-send` solo se invoca si existe y si `native_notifications: true`; por defecto está desactivado. No se ejecutó ninguna notificación real ni build/CI.
+
+> ## ✅ ACEPTAR

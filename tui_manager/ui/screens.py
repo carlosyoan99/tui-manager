@@ -1584,6 +1584,7 @@ class AppsScreen(Screen):
                 msg = f'{t("packages.action_failed")}: {result.error or "—"}'
             self.app.call_from_thread(self.notify, msg,
                                       severity='information' if result.ok else 'error')
+            self.app.call_from_thread(self.app.notify_native, 'TUI Manager', msg)
         except Exception as exc:
             logger.exception('instalación desde fuente falló')
             self.app.call_from_thread(
