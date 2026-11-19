@@ -8,6 +8,9 @@ Uso:
     tui-manager --doctor   diagnóstico del entorno (SO, distro, gestor,
                            entorno de escritorio, capacidades, versiones de
                            CLIs, elevación)
+    tui-manager --json X   datos estructurados (X=packages|processes|doctor)
+                           como JSON a stdout, para scripts y agentes
+    tui-manager --quickstart  recorrido guiado por las 10 entradas del menú
     tui-manager --lang es  fuerza el idioma (es|en) para esta ejecución
 
 Inspired: Omarchy Quattro. Portable: Linux, BSD y Termux (limitado).
@@ -73,44 +76,60 @@ def build_parser() -> argparse.ArgumentParser:
                         help='muestra la versión y sale')
     parser.add_argument('--doctor', action='store_true',
                         help='diagnóstico del entorno y sale')
+    parser.add_argument('--json', choices=('packages', 'processes', 'doctor'),
+                        default=None, metavar='KIND',
+                        help='datos estructurados (packages|processes|doctor) '
+                             'como JSON en stdout')
+    parser.add_argument('--quickstart', action='store_true',
+                        help='recorrido guiado por el menú y sale')
     parser.add_argument('--lang', choices=available_languages(), default=None,
                         help='idioma de la interfaz (por defecto: config)')
     return parser
 
 
-def run_doctor() -> str:
-    """Devuelve el informe de diagnóstico como texto multi-línea."""
+def collect_doctor_data() -> dict:
+    """Recoge el diagnóstico en forma estructurada (única fuente de verdad).
+
+    Tanto el informe de texto (:func:`run_doctor`) como la salida
+    ``--json doctor`` consumen esta función. Así la lógica de subprocess
+    (``_cli_version``: solo ``<cli> --version``) y la detección de entorno no
+    se duplican: hay una sola implementación compartida.
+
+    Devuelve un dict con:
+      * ``distribution``: distro detectada o ``None`` si falló.
+      * ``rows``: lista de ``{'key', 'value', 'warn'}`` en orden de informe.
+      * ``suggestions``: claves i18n de sugerencias (únicas, orden estable).
+    """
     config = Config()
-    lines = [f'{t("app.title")} — {t("doctor.title")}']
+    rows = []
 
-    def add(label, value, warn=False):
-        state = t('doctor.warn') if warn else t('doctor.ok')
-        lines.append(f'{label:<22} {value}  [{state}]')
+    def add(key, value, warn=False):
+        rows.append({'key': key, 'value': str(value), 'warn': bool(warn)})
 
-    add(t('doctor.os'), f'{platform.system()} {platform.release()} '
+    add('doctor.os', f'{platform.system()} {platform.release()} '
         f'({platform.machine()})')
     try:
         distro = DistributionDetector.detect()
-        add(t('doctor.distro'), distro)
+        add('doctor.distro', distro)
     except DistributionError as exc:
-        add(t('doctor.distro'), str(exc), warn=True)
+        add('doctor.distro', str(exc), warn=True)
         distro = None
 
     if distro:
         try:
             from tui_manager.core.package_manager import PackageManager
             pm = PackageManager(distribution=distro)
-            add(t('doctor.pm'), f'{distro} → {type(pm.adapter).__name__}')
+            add('doctor.pm', f'{distro} → {type(pm.adapter).__name__}')
         except Exception as exc:
-            add(t('doctor.pm'), str(exc), warn=True)
+            add('doctor.pm', str(exc), warn=True)
 
     try:
         env = EnvironmentDetector.detect()
         caps = ', '.join(sorted(c.name.lower() for c in env.capabilities())) or '—'
-        add(t('doctor.env'), type(env).__name__)
-        add(t('doctor.caps'), caps)
+        add('doctor.env', type(env).__name__)
+        add('doctor.caps', caps)
     except Exception as exc:
-        add(t('doctor.env'), str(exc), warn=True)
+        add('doctor.env', str(exc), warn=True)
 
     # Versiones de CLIs (B2-2): únicamente `<cli> --version`, sin efectos
     # en el sistema. Las ausentes se degradan a «N/D» con estado de aviso.
@@ -120,22 +139,22 @@ def run_doctor() -> str:
         cli_versions[cli] = version
         add(cli, version, warn=version == 'N/D')
 
-    add(t('doctor.sudo'), shutil.which('sudo') or 'no (root directo/termux)',
+    add('doctor.sudo', shutil.which('sudo') or 'no (root directo/termux)',
         warn=shutil.which('sudo') is None and platform.system() == 'Linux'
         and not _is_termux())
-    add(t('doctor.python'), sys.version.split()[0])
+    add('doctor.python', sys.version.split()[0])
 
     try:
         import textual
-        add(t('doctor.textual'), textual.__version__)
+        add('doctor.textual', textual.__version__)
     except Exception as exc:
-        add(t('doctor.textual'), str(exc), warn=True)
+        add('doctor.textual', str(exc), warn=True)
 
     exists = __import__('os').path.exists(config.config_file)
-    add(t('doctor.cfg'), f'{config.config_file} '
+    add('doctor.cfg', f'{config.config_file} '
         f'({"sí" if exists else "no (defaults)"})')
 
-    # Criterio 15 de 1.0: além de informar, Sugerir el fix concreto.
+    # Criterio 15 de 1.0: además de informar, sugerir el fix concreto.
     suggestions = []
     if distro is None:
         suggestions.append('doctor.fix.distro')
@@ -147,15 +166,49 @@ def run_doctor() -> str:
         import textual  # noqa: F401
     except Exception:
         suggestions.append('doctor.fix.textual')
-    if suggestions:
+
+    seen = set()
+    unique_suggestions = []
+    for key in suggestions:
+        if key not in seen:
+            seen.add(key)
+            unique_suggestions.append(key)
+
+    return {
+        'distribution': distro,
+        'rows': rows,
+        'suggestions': unique_suggestions,
+    }
+
+
+def run_doctor() -> str:
+    """Devuelve el informe de diagnóstico como texto multi-línea."""
+    data = collect_doctor_data()
+    lines = [f'{t("app.title")} — {t("doctor.title")}']
+
+    for row in data['rows']:
+        state = t('doctor.warn') if row['warn'] else t('doctor.ok')
+        label = t(row['key'])
+        lines.append(f'{label:<22} {row["value"]}  [{state}]')
+
+    if data['suggestions']:
         lines.append('')
         lines.append(t('doctor.fix.title'))
-        seen = set()
-        for key in suggestions:
-            if key not in seen:
-                seen.add(key)
-                lines.append(f'  - {t(key)}')
+        for key in data['suggestions']:
+            lines.append(f'  - {t(key)}')
     return '\n'.join(lines)
+
+
+def run_quickstart() -> str:
+    """Devuelve el recorrido guiado del menú como texto multi-línea.
+
+    La lógica vive en ``screens.quickstart_text`` para reutilizar la lista de
+    entradas y los atajos de ``MainMenuScreen`` como única fuente de verdad.
+    No inicia la TUI y no ejecuta subprocesos: solo compone texto plano con
+    claves i18n existentes (``menu.*``) y las nuevas ``quickstart.*``.
+    """
+    from tui_manager.ui.screens import quickstart_text
+    return quickstart_text()
 
 
 def _is_termux() -> bool:
@@ -173,9 +226,21 @@ def main(argv=None) -> int:
     config = Config()
     set_language(args.lang or config.get('language', DEFAULT_LANGUAGE))
 
+    if args.json:
+        # Import diferido para evitar importación circular con main.py.
+        # La ruta JSON NO configura el logger: su StreamHandler(sys.stdout)
+        # mezclaría logs con el JSON. cli_json silencia logging de forma
+        # temporal y escribe errores en stderr con exit code 1.
+        from tui_manager.cli_json import emit_json
+        return emit_json(args.json)
+
     if args.doctor:
         setup_logger('TUI-Manager')
         print(run_doctor())
+        return 0
+
+    if args.quickstart:
+        print(run_quickstart())
         return 0
 
     # Arranque normal de la TUI
