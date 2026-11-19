@@ -73,6 +73,11 @@ STRINGS: dict[str, dict[str, str]] = {
         'menu.logs.desc': 'Ver el log de la aplicación',
         'menu.coming_soon': 'disponible en {phase}',
 
+        # Recorrido rápido (--quickstart)
+        'quickstart.title': 'Recorrido rápido (--quickstart)',
+        'quickstart.intro': 'Recorre las 10 entradas del menú. Pulsa su atajo en la TUI para abrir cada una.',
+        'quickstart.doctor_hint': 'Cuando termines, ejecuta `tm --doctor` para comprobar tu entorno.',
+
         # Paquetes
         'packages.title': 'Gestión de aplicaciones',
         'packages.installed_list': 'Instalados',
@@ -332,6 +337,11 @@ STRINGS: dict[str, dict[str, str]] = {
         'menu.logs': 'Logs',
         'menu.logs.desc': 'View the application log',
         'menu.coming_soon': 'available in {phase}',
+
+        # Quick tour (--quickstart)
+        'quickstart.title': 'Quick tour (--quickstart)',
+        'quickstart.intro': 'Tour the 10 menu entries. Press their shortcut in the TUI to open each one.',
+        'quickstart.doctor_hint': 'When you are done, run `tm --doctor` to check your environment.',
 
         'packages.title': 'Application management',
         'packages.installed_list': 'Installed',

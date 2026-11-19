@@ -213,6 +213,31 @@ class MainMenuScreen(Screen):
             self.app.push_screen(screen_cls(self.services))
 
 
+def quickstart_text() -> str:
+    """Texto del recorrido guiado por el menú para la CLI (``--quickstart``).
+
+    Reutiliza ``MainMenuScreen.ENTRIES`` y ``MainMenuScreen.shortcut`` como
+    única fuente de verdad: si cambian las entradas o los atajos del menú,
+    este recorrido se actualiza solo. Usa las claves i18n ``menu.*`` ya
+    existentes para nombre y descripción. No inicia la TUI ni ejecuta
+    subprocesos: solo compone texto plano.
+    """
+    lines = [
+        f'{t("app.title")} — {t("quickstart.title")}',
+        '',
+        t('quickstart.intro'),
+        '',
+    ]
+    for index, (entry_id, _screen) in enumerate(MainMenuScreen.ENTRIES):
+        key = MainMenuScreen.shortcut(index)
+        name = t(f'menu.{entry_id}')
+        desc = t(f'menu.{entry_id}.desc')
+        lines.append(f'  [{key}] {name} — {desc}')
+    lines.append('')
+    lines.append(t('quickstart.doctor_hint'))
+    return '\n'.join(lines)
+
+
 # ------------------------------------------------------------ Paquetes ----
 
 class PackagesScreen(Screen):

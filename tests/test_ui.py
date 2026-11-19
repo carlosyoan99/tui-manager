@@ -1193,3 +1193,49 @@ async def test_processes_sort_all_criteria(tmp_path, monkeypatch,
         assert order == expected
         assert t(f'processes.sort_{criterion}') in str(
             screen.query_one('#process-status').render())
+
+
+# ------------------------- 1.2-A: quickstart (onboarding) -------------------
+
+def test_quickstart_text_covers_all_menu_entries(monkeypatch):
+    """El recorrido reutiliza entradas y atajos del menú (fuente única)."""
+    from tui_manager import i18n
+    from tui_manager.i18n import t
+    from tui_manager.ui.screens import MainMenuScreen, quickstart_text
+
+    monkeypatch.setattr(i18n, '_current', 'es')
+    lines = quickstart_text().splitlines()
+    assert len(MainMenuScreen.ENTRIES) == 10
+    for index, (entry_id, _screen) in enumerate(MainMenuScreen.ENTRIES):
+        key = MainMenuScreen.shortcut(index)
+        expected = (f'  [{key}] {t(f"menu.{entry_id}")} — '
+                    f'{t(f"menu.{entry_id}.desc")}')
+        assert expected in lines, f'falta la línea: {expected}'
+    assert 'tm --doctor' in '\n'.join(lines)
+
+
+@pytest.mark.parametrize('lang', ['es', 'en'])
+def test_quickstart_text_is_localized_plain_text(monkeypatch, lang):
+    """Texto plano y localizado: sin ANSI y con la sugerencia de --doctor."""
+    from tui_manager import i18n
+    from tui_manager.i18n import t
+    from tui_manager.ui.screens import quickstart_text
+
+    monkeypatch.setattr(i18n, '_current', lang)
+    text = quickstart_text()
+    assert t('app.title') in text
+    assert t('quickstart.title') in text
+    assert t('quickstart.intro') in text
+    assert t('quickstart.doctor_hint') in text
+    assert 'tm --doctor' in text
+    assert '\x1b[' not in text  # sin códigos de control ANSI
+
+
+def test_quickstart_text_needs_no_services():
+    """No requiere Services ni instancia pantallas: solo compone texto."""
+    from tui_manager.ui.screens import quickstart_text
+
+    text = quickstart_text()
+    assert isinstance(text, str)
+    assert len(text.splitlines()) >= 14  # cabecera + 10 entradas + sugerencia
+

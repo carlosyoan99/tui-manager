@@ -132,3 +132,71 @@ def test_doctor_reports_environment_capabilities(monkeypatch):
     assert 'FakeEnv' in report  # etiqueta = tipo del adapter detectado
     assert 'set_wallpaper' in report
     assert 'lock_screen' in report
+
+
+# ---------------------------------- 1.2-A: --quickstart (onboarding) --------
+
+def test_cli_quickstart_exits_zero_and_tours_ten_entries(capsys):
+    """--quickstart muestra las 10 entradas con atajo, nombre y descripción."""
+    from tui_manager.i18n import t
+    from tui_manager.ui.screens import MainMenuScreen
+
+    assert main(['--quickstart', '--lang', 'es']) == 0
+    out = capsys.readouterr().out
+    assert len(MainMenuScreen.ENTRIES) == 10
+    for index, (entry_id, _screen) in enumerate(MainMenuScreen.ENTRIES):
+        key = MainMenuScreen.shortcut(index)
+        assert f'[{key}]' in out
+        assert t(f'menu.{entry_id}') in out
+        assert t(f'menu.{entry_id}.desc') in out
+
+
+def test_cli_quickstart_suggests_doctor(capsys):
+    """El recorrido termina sugiriendo `tm --doctor`."""
+    assert main(['--quickstart', '--lang', 'es']) == 0
+    out = capsys.readouterr().out
+    assert 'tm --doctor' in out
+    assert out.rstrip().splitlines()[-1].find('tm --doctor') >= 0
+
+
+def test_cli_quickstart_respects_lang(capsys):
+    """--lang en traduce el recorrido sin tocar --version/--doctor."""
+    assert main(['--quickstart', '--lang', 'en']) == 0
+    out = capsys.readouterr().out
+    assert 'Quick tour' in out
+    assert 'When you are done' in out
+    assert 'tm --doctor' in out
+
+
+def test_cli_quickstart_runs_no_subprocess(capsys, monkeypatch):
+    """Es texto plano: no lanza comandos ni inicia la TUI."""
+    def forbidden(*args, **kwargs):
+        raise AssertionError('--quickstart no debe ejecutar subprocesos')
+
+    monkeypatch.setattr(main_module.subprocess, 'run', forbidden)
+    assert main(['--quickstart', '--lang', 'es']) == 0
+    out = capsys.readouterr().out
+    assert '\x1b[' not in out  # sin códigos de control ANSI
+    assert 'tm --doctor' in out
+
+
+def test_run_quickstart_matches_screen_helper(monkeypatch):
+    """La API de main expone el mismo texto que el helper de screens."""
+    from tui_manager import i18n
+    from tui_manager.main import run_quickstart
+    from tui_manager.ui.screens import quickstart_text
+
+    monkeypatch.setattr(i18n, '_current', 'es')
+    assert run_quickstart() == quickstart_text()
+
+
+def test_quickstart_i18n_keys_in_both_languages():
+    """Las claves nuevas existen en es y en, dentro de cada dict."""
+    from tui_manager.i18n import STRINGS
+
+    for lang, strings in STRINGS.items():
+        for key in ('quickstart.title', 'quickstart.intro',
+                    'quickstart.doctor_hint'):
+            assert key in strings, f'{key} falta en {lang}'
+        assert 'tm --doctor' in strings['quickstart.doctor_hint']
+
