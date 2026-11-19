@@ -222,4 +222,10 @@ con `defs` (hex) y `theme` (mapeos dark/light). Colores distintos por wallpaper.
 **Observación:** `theme_source: mutagen` es opt-in (default `manual`). El escritorio
 sigue siendo tema de Noctalia; el Select de la TUI solo afecta a textual.
 
-> ## ✅ 1.1 — ACEPTAR (pendiente replicar en 4 hosts)
+> ## ✅ 1.1 — ACEPTAR
+>
+> Replicado y verificado en los 4 hosts en `382e742`: notebook, laptop, void y
+> móvil, **361 tests verdes en cada uno**. Los 2 fallos del móvil (`device_type`,
+> `gpu`) se debían a que los tests no neutralizaban `PREFIX` de Termux; corregido
+> en `c73a8ba`. El catálogo incorpora marcas con Espacio, columna «Instalado» e
+> instalación por lote (`382e742`).
