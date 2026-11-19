@@ -124,7 +124,7 @@ TUI-Manager/
 
 ## Estado
 
-**1.0 Estable** — 15 criterios cumplidos y verificado en 4 equipos (CachyOS ×2, Void, Termux). La TUI con [textual](https://textual.textualize.io/) es funcional: paquetes, procesos, system, temas, actualizaciones, ajustes, ayuda, acerca de y logs, con degradación elegante por capacidades. Núcleo multi-SO (Linux, BSD, Termux) con 119 tests verdes. Ver [`CHANGELOG.md`](CHANGELOG.md) y [`docs/ROADMAP.md`](docs/ROADMAP.md) para el detalle de fases y criterios de salida.
+**1.1.0** — iconos, multiselección, orden de procesos, tema matugen y Acerca de estilo fastfetch (sobre la base 1.0 verificada en 4 equipos). La TUI con [textual](https://textual.textualize.io/) es funcional: paquetes, procesos, system, temas, actualizaciones, ajustes, ayuda, acerca de y logs, con degradación elegante por capacidades. Núcleo multi-SO (Linux, BSD, Termux) con 119 tests verdes. Ver [`CHANGELOG.md`](CHANGELOG.md) y [`docs/ROADMAP.md`](docs/ROADMAP.md) para el detalle de fases y criterios de salida.
 
 ## Licencia
 

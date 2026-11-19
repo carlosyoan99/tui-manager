@@ -49,6 +49,7 @@ STRINGS: dict[str, dict[str, str]] = {
         'common.close': 'Cerrar',
         'common.apply': 'Aplicar',
         'common.refresh_done': 'Lista actualizada',
+        'common.selected': 'Marcado',
 
         # Menú principal
         'menu.title': 'Menú principal',
@@ -88,7 +89,12 @@ STRINGS: dict[str, dict[str, str]] = {
         'packages.remove_ok': '{name} desinstalado',
         'packages.action_failed': 'La acción falló: ver log para detalles',
         'packages.deps': 'Dependencias',
-        'packages.keys': '[i]nstalar  [r]emover  [u]nfo  [c]aché  [U]pgrade  [f]iltrar',
+        'packages.keys': '[i]nstalar  [r]emover  [u]nfo  [c]aché  [U]pgrade  [f]iltrar · [espacio] marcar',
+        'packages.toggle_mark': 'Marcar/desmarcar fila',
+        'packages.install_many_confirm': '¿Instalar {n} paquetes?',
+        'packages.remove_many_confirm': '¿Desinstalar {n} paquetes?',
+        'packages.install_many_ok': '{n} paquetes instalados',
+        'packages.remove_many_ok': '{n} paquetes desinstalados',
 
         # Procesos
         'processes.title': 'Monitor de procesos',
@@ -105,6 +111,9 @@ STRINGS: dict[str, dict[str, str]] = {
         'processes.sort': 'Ordenar',
         'processes.sort_cpu': 'por CPU',
         'processes.sort_mem': 'por memoria',
+        'processes.sort_user': 'por usuario',
+        'processes.sort_name': 'por nombre',
+        'processes.sort_pid': 'por PID',
 
         # Sistema
         'system.title': 'Sistema',
@@ -181,6 +190,7 @@ STRINGS: dict[str, dict[str, str]] = {
         'settings.language_help': 'Idioma de los menús y mensajes (Español / English).',
         'settings.saved': 'Ajustes guardados',
         'settings.termux_note': 'Termux/Android: soporte limitado (paquetes del prefix, procesos propios, temas internos)',
+        'settings.generic_note': 'Los ajustes se guardan en este equipo y se aplican a la interfaz de la TUI.',
 
         # Ayuda / Acerca / Doctor
         'help.title': 'Ayuda',
@@ -251,6 +261,15 @@ STRINGS: dict[str, dict[str, str]] = {
     'doctor.fix.distro': 'No se detectó el SO: revisa /etc/os-release o instala lsb-release.',
     'doctor.fix.cli': 'Falta una CLI del gestor: instálala con el gestor de tu distro (ej. pacman -S pacman, apt install apt).',
     'doctor.fix.textual': 'Instala la dependencia TUI: pip install textual (o pip install -r requirements.txt).',
+    'settings.theme_source': 'Origen del tema (solo TUI)',
+    'settings.theme_source_help': 'Manual usa el tema elegido arriba. Matugen replica dinámicamente el esquema que Noctalia genera desde tu wallpaper (~/.config/opencode/themes/matugen.json). El tema del escritorio lo sigue gestionando Noctalia.',
+    'about.os_version': 'Versión SO',
+    'about.device_name': 'Dispositivo',
+    'about.device_type': 'Tipo',
+    'about.pm': 'Gestor de paquetes',
+    'about.session': 'Sesión',
+    'about.displays': 'Pantallas',
+    'about.gpu': 'Gráfica',
     },
 
     'en': {
@@ -288,6 +307,7 @@ STRINGS: dict[str, dict[str, str]] = {
         'common.close': 'Close',
         'common.apply': 'Apply',
         'common.refresh_done': 'List refreshed',
+        'common.selected': 'Marked',
 
         'menu.title': 'Main menu',
         'menu.packages': 'Applications',
@@ -325,7 +345,12 @@ STRINGS: dict[str, dict[str, str]] = {
         'packages.remove_ok': '{name} removed',
         'packages.action_failed': 'Action failed: check log for details',
         'packages.deps': 'Dependencies',
-        'packages.keys': '[i]nstall  [r]emove  [u]info  [c]ache  [U]pgrade  [f]ilter',
+        'packages.keys': '[i]nstall  [r]emove  [u]info  [c]ache  [U]pgrade  [f]ilter · [space] mark',
+        'packages.toggle_mark': 'Mark/unmark row',
+        'packages.install_many_confirm': 'Install {n} packages?',
+        'packages.remove_many_confirm': 'Remove {n} packages?',
+        'packages.install_many_ok': '{n} packages installed',
+        'packages.remove_many_ok': '{n} packages removed',
 
         'processes.title': 'Process monitor',
         'processes.pid': 'PID',
@@ -341,6 +366,9 @@ STRINGS: dict[str, dict[str, str]] = {
         'processes.sort': 'Sort',
         'processes.sort_cpu': 'by CPU',
         'processes.sort_mem': 'by memory',
+        'processes.sort_user': 'by user',
+        'processes.sort_name': 'by name',
+        'processes.sort_pid': 'by PID',
 
         'system.title': 'System',
         'system.lock': 'Lock screen',
@@ -413,6 +441,7 @@ STRINGS: dict[str, dict[str, str]] = {
         'settings.language_help': 'Language of menus and messages (Español / English).',
         'settings.saved': 'Settings saved',
         'settings.termux_note': 'Termux/Android: limited support (prefix packages, own processes, internal themes)',
+        'settings.generic_note': 'Settings are saved on this device and applied to the TUI interface.',
 
         'help.title': 'Help',
         'help.keys_general': '↑/↓ navigate · Enter select · Esc back · q quit · ? help',
@@ -484,6 +513,15 @@ STRINGS: dict[str, dict[str, str]] = {
     'doctor.fix.cli': 'A package-manager CLI is missing: install it with your distro manager (e.g. apt install apt).',
     'doctor.fix.textual': 'Install the TUI dependency: pip install textual (or pip install -r requirements.txt).',
 
+    'settings.theme_source': 'Theme source (TUI only)',
+    'settings.theme_source_help': 'Manual uses the theme chosen above. Matugen dynamically mirrors the scheme Noctalia generates from your wallpaper (~/.config/opencode/themes/matugen.json). Desktop theming is still handled by Noctalia.',
+    'about.os_version': 'OS version',
+    'about.device_name': 'Device',
+    'about.device_type': 'Type',
+    'about.pm': 'Package manager',
+    'about.session': 'Session',
+    'about.displays': 'Displays',
+    'about.gpu': 'GPU',
     },
 }
 

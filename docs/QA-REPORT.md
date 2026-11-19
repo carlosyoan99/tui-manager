@@ -200,3 +200,26 @@ FreeBSD fue verificado por tests simulados y por el descriptor `packaging/freebs
 no en una máquina FreeBSD real (no disponible entre los hosts).
 
 > ## ✅ 1.0 ESTABLE — ACEPTAR (según equipos disponibles y criterios verificables)
+
+---
+
+# QA-REPORT — 1.1 (interfaz, lote, orden y tema dinámico)
+
+**Fecha:** 2026-11-19 · **Commit base de cierre:** worktree · **Suite:** 361 tests verdes.
+
+| Subtarea | Descripción | Estado |
+|---|---|---|
+| 1.1-A | Iconos con fallback ASCII + Selects compactos | ✅ |
+| 1.1-B | Aviso de Termux solo en Termux | ✅ test parametrizado |
+| 1.1-C | Multiselección con Espacio y acciones por lote | ✅ 3 filas → 3 acciones, 1 recarga |
+| 1.1-D | Orden procesos cpu/mem/user/name/pid | ✅ 5 criterios |
+| 1.1-E | theme_source manual|mutagen + paleta matugen real | ✅ 8 tests |
+| 1.1-F | About estilo fastfetch (GPU, displays, tipo, etc.) | ✅ 9 tests |
+
+**Formato matugen verificado en las 3 laptops:** `~/.config/opencode/themes/matugen.json`
+con `defs` (hex) y `theme` (mapeos dark/light). Colores distintos por wallpaper.
+
+**Observación:** `theme_source: mutagen` es opt-in (default `manual`). El escritorio
+sigue siendo tema de Noctalia; el Select de la TUI solo afecta a textual.
+
+> ## ✅ 1.1 — ACEPTAR (pendiente replicar en 4 hosts)

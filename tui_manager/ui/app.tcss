@@ -93,6 +93,13 @@ Select:focus {
     border: tall $accent;
 }
 
+/* Ajustes: los Select tienen ancho fijo y no se reparten el disponible
+   lado a lado; la etiqueta queda siempre legible a su izquierda. */
+Select.select-compact {
+    width: 34;
+    max-width: 60%;
+}
+
 VerticalScroll {
     padding: 0 1;
 }

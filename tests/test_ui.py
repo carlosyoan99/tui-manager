@@ -1025,3 +1025,171 @@ async def test_processes_pause_resume_polling(tmp_path, monkeypatch):
         assert screen._interval._active.is_set()
         await _wait_workers(app, pilot)
         assert len(services.process_monitor.calls) > calls_before
+
+
+# ------------------------- 1.1-A: iconos y selects compactos ----------------
+
+@pytest.mark.parametrize('term,icon,title_icon', [
+    ('xterm-256color', '▤', '◆'),
+    ('dumb', 'P', '*'),
+])
+@pytest.mark.asyncio
+async def test_menu_icons_and_ascii_fallback(tmp_path, monkeypatch,
+                                             term, icon, title_icon):
+    """Los iconos aparecen en títulos/entradas; TERM=dumb usa ASCII."""
+    from textual.widgets import ListItem, Static
+    from tui_manager.ui.screens import MainMenuScreen
+
+    monkeypatch.setenv('TERM', term)
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        items = app.screen.query(ListItem)
+        first = items[0].query_one(Static).content
+        assert first.startswith(f'[{MainMenuScreen.shortcut(0)}] {icon} ')
+        title = str(app.screen.query_one('.title').render())
+        assert f'{title_icon} TUI Manager' in title
+        if term == 'dumb':
+            assert '▤' not in first and '◆' not in title
+
+
+@pytest.mark.asyncio
+async def test_settings_selects_have_fixed_width(tmp_path, monkeypatch):
+    """1.1-A: los Select de Ajustes usan la clase compacta (ancho fijo)."""
+    from tui_manager.ui.screens import SettingsScreen
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        app.push_screen(SettingsScreen(services))
+        await pilot.pause()
+        for selector in ('#select-theme', '#select-language'):
+            select = app.screen.query_one(selector)
+            assert 'select-compact' in select.classes
+            assert select.styles.width is not None
+            assert select.styles.width.value == 34
+            assert select.styles.max_width is not None
+            assert select.styles.max_width.value == 60
+
+
+# ---------------------- 1.1-B: nota de Termux condicional ------------------
+
+@pytest.mark.parametrize('is_termux', [True, False])
+@pytest.mark.asyncio
+async def test_settings_termux_note_only_on_termux(tmp_path, monkeypatch,
+                                                    is_termux):
+    """La nota de Termux solo se muestra cuando is_termux() es True."""
+    from tui_manager.core.distribution import DistributionDetector
+    from tui_manager.ui.screens import SettingsScreen
+
+    monkeypatch.setattr(DistributionDetector, 'is_termux',
+                        staticmethod(lambda: is_termux))
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        app.push_screen(SettingsScreen(services))
+        await pilot.pause()
+        text = str(app.screen.query_one('#settings-note').render())
+        if is_termux:
+            assert 'Termux' in text
+        else:
+            assert 'Termux' not in text
+            assert text  # nota neutra en su lugar
+
+
+# ------------------ 1.1-C: selección múltiple en paquetes -------------------
+
+@pytest.mark.asyncio
+async def test_packages_batch_mark_remove_single_reload(tmp_path, monkeypatch):
+    """Espacio marca 3 filas; remover las 3 con una confirmación y una recarga."""
+    from tui_manager.ui.screens import ConfirmScreen
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.press('1')
+        await _wait_workers(app, pilot)
+        screen = app.screen
+        table = screen.query_one('#packages-table')
+        assert table.row_count == 3
+
+        for row in range(3):
+            table.move_cursor(row=row)
+            await pilot.press('space')
+            await pilot.pause()
+        assert len(screen._marked) == 3
+
+        screen.action_remove()
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmScreen)
+        message = str(app.screen.query_one('#confirm-message').render())
+        assert '3' in message and 'paquetes' in message
+
+        pm = services.package_manager
+        reloads = pm.calls.count('installed')
+        await pilot.press('y')
+        await _wait_workers(app, pilot)
+        removed = [c for c in pm.calls
+                   if isinstance(c, tuple) and c[0] == 'remove']
+        assert {name for _, name in removed} == {'curl', 'git', 'ripgrep'}
+        assert pm.calls.count('installed') == reloads + 1
+        assert not screen._marked
+
+
+@pytest.mark.asyncio
+async def test_packages_batch_cancel_does_nothing(tmp_path, monkeypatch):
+    """Cancelar la confirmación no ejecuta ninguna acción por lote."""
+    from tui_manager.ui.screens import ConfirmScreen
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.press('1')
+        await _wait_workers(app, pilot)
+        screen = app.screen
+        for row in range(2):
+            screen.query_one('#packages-table').move_cursor(row=row)
+            await pilot.press('space')
+            await pilot.pause()
+        screen.action_install()
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmScreen)
+        await pilot.press('n')
+        await _wait_workers(app, pilot)
+        assert not [c for c in services.package_manager.calls
+                    if isinstance(c, tuple) and c[0] == 'install']
+        assert len(screen._marked) == 2  # cancelar conserva la selección
+
+
+# ------------------------- 1.1-D: orden de procesos -------------------------
+
+@pytest.mark.parametrize('criterion,expected', [
+    ('cpu', ['4242', '1', '777']),     # descendente
+    ('mem', ['777', '4242', '1']),     # descendente
+    ('user', ['1', '777', '4242']),    # ascendente (root < user; PID desempata)
+    ('name', ['1', '4242', '777']),    # ascendente (/sbin/init < firefox < java)
+    ('pid', ['4242', '777', '1']),     # descendente
+])
+@pytest.mark.asyncio
+async def test_processes_sort_all_criteria(tmp_path, monkeypatch,
+                                           criterion, expected):
+    """'s' cicla por los cinco criterios con su dirección y etiqueta i18n."""
+    from tui_manager.i18n import t
+    from tui_manager.ui.screens import ProcessesScreen
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.press('2')
+        await _wait_workers(app, pilot)
+        screen = app.screen
+        assert isinstance(screen, ProcessesScreen)
+        while screen._sort != criterion:
+            screen.action_sort()
+            await pilot.pause()
+        table = screen.query_one('#process-table')
+        order = [str(table.get_row_at(i)[0]) for i in range(table.row_count)]
+        assert order == expected
+        assert t(f'processes.sort_{criterion}') in str(
+            screen.query_one('#process-status').render())

@@ -40,9 +40,68 @@ from textual.containers import Vertical, VerticalScroll
 
 from tui_manager.i18n import t
 from tui_manager.ui.app import Services
+from tui_manager.core.distribution import DistributionDetector
 from tui_manager.core.sources_adapter import SourcesAdapter
 
 logger = logging.getLogger(__name__)
+
+
+# --------------------------------------------------------------- Iconos ----
+
+# Iconos Unicode del menú. Cuando TERM=dumb (o la terminal no garantiza la
+# fuente) se degradan a letras ASCII: siguen siendo legibles y no rompen el
+# ancho de las filas ni los atajos numéricos que las prefijan.
+_MENU_ICONS = {
+    'packages': ('▤', 'P'),
+    'processes': ('⚙', 'S'),
+    'system': ('▣', 'Y'),
+    'themes': ('◐', 'T'),
+    'updates': ('⇧', 'U'),
+    'settings': ('⚒', 'G'),
+    'help': ('?', '?'),
+    'about': ('ⓘ', 'I'),
+    'logs': ('☰', 'L'),
+    'apps': ('◈', 'C'),
+}
+_TITLE_ICON = ('◆', '*')
+_SCREEN_ICON_KEYS = {
+    'MainMenuScreen': '',
+    'PackagesScreen': 'packages',
+    'ProcessesScreen': 'processes',
+    'SystemScreen': 'system',
+    'ThemesScreen': 'themes',
+    'UpdatesScreen': 'updates',
+    'SettingsScreen': 'settings',
+    'HelpScreen': 'help',
+    'AboutScreen': 'about',
+    'LogsScreen': 'logs',
+    'AppsScreen': 'apps',
+}
+
+
+def _ascii_only() -> bool:
+    """Terminal sin garantías de fuente: solo ASCII seguro."""
+    return os.environ.get('TERM', '').lower() == 'dumb'
+
+
+def menu_icon(entry_id: str) -> str:
+    """Icono de una entrada del menú, con fallback ASCII para TERM=dumb."""
+    glyph, ascii_glyph = _MENU_ICONS.get(entry_id, ('·', '-'))
+    return ascii_glyph if _ascii_only() else glyph
+
+
+def title_icon() -> str:
+    """Icono del título; en TERM=dumb se usa un marcador ASCII."""
+    glyph, ascii_glyph = _TITLE_ICON
+    return ascii_glyph if _ascii_only() else glyph
+
+
+def screen_icon(screen_name: str) -> str:
+    """Icono acorde a la pantalla activa (o el genérico si no hay entrada)."""
+    key = _SCREEN_ICON_KEYS.get(screen_name)
+    if key is None:
+        return title_icon()
+    return menu_icon(key) if key else title_icon()
 
 
 def _status(message: str, keys: str = '', empty: bool = False) -> str:
@@ -106,7 +165,8 @@ class MainMenuScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("app.title")}[/] — {t("menu.title")}', classes='title')
+        yield Label(f'[b]{title_icon()} {t("app.title")}[/] — {t("menu.title")}',
+                    classes='title')
         yield ListView(id='menu')
         yield Static(t('menu.keys'), id='menu-status', classes='status', markup=False)
         yield Footer()
@@ -119,7 +179,8 @@ class MainMenuScreen(Screen):
             desc = t(f'menu.{entry_id}.desc')
             key = self.shortcut(index)
             menu.append(ListItem(
-                Static(f'[{key}] {label} — {desc}', markup=False), id=entry_id))
+                Static(f'[{key}] {menu_icon(entry_id)} {label} — {desc}',
+                       markup=False), id=entry_id))
         if self.ENTRIES:
             menu.index = 0
         menu.focus()
@@ -164,6 +225,7 @@ class PackagesScreen(Screen):
         ('c', 'cache', t('packages.update_cache')),
         ('f', 'filter', t('common.search')),
         Binding('/', 'filter', show=False),
+        ('space', 'toggle_mark', t('packages.toggle_mark')),
         ('?', 'help', t('common.help')),
         ('escape', 'back', t('common.back')),
     ]
@@ -172,11 +234,15 @@ class PackagesScreen(Screen):
         super().__init__()
         self.services = services
         self._packages = []
+        # 1.1-C: índices (en `_packages`) de las filas marcadas con Espacio.
+        self._marked: set[int] = set()
+        self._origin = t('packages.installed_list')
+        self._pending: list = []
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("packages.title")}[/] ({self.services.distribution})',
-                    classes='title')
+        yield Label(f'[b]{screen_icon("PackagesScreen")} {t("packages.title")}[/] '
+                    f'({self.services.distribution})', classes='title')
         yield Input(placeholder=t('common.search'), id='search')
         yield LoadingIndicator(id='packages-loading')
         yield DataTable(id='packages-table')
@@ -186,8 +252,9 @@ class PackagesScreen(Screen):
     def on_mount(self) -> None:
         table = self.query_one('#packages-table', DataTable)
         table.cursor_type = 'row'
-        table.add_columns(t('common.name'), t('common.version'),
-                          t('common.installed'), t('common.description'))
+        table.add_columns(t('common.selected'), t('common.name'),
+                          t('common.version'), t('common.installed'),
+                          t('common.description'))
         table.focus()
         self.query_one('#packages-loading', LoadingIndicator).display = True
         self.load_installed()
@@ -211,12 +278,21 @@ class PackagesScreen(Screen):
         packages = self.services.package_manager.search_package(query)
         self.app.call_from_thread(self._fill, packages, t('packages.search_results'))
 
-    def _fill(self, packages, origin: str) -> None:
+    def _fill(self, packages, origin: str, *, keep_marks: bool = False) -> None:
+        """Vuelca la tabla. `keep_marks` se usa solo al marcar/desmarcar.
+
+        Una recarga normal (búsqueda o tras instalar/remover) descarta las
+        marcas: los índices ya no apuntarían a los mismos paquetes.
+        """
         self._packages = list(packages)
+        self._origin = origin
+        if not keep_marks:
+            self._marked.clear()
         table = self.query_one('#packages-table', DataTable)
         table.clear()
-        for pkg in self._packages:
-            table.add_row(pkg.name, pkg.version,
+        for index, pkg in enumerate(self._packages):
+            table.add_row('✓' if index in self._marked else '',
+                          pkg.name, pkg.version,
                           '✓' if pkg.installed else '',
                           pkg.description or '')
         try:
@@ -246,54 +322,107 @@ class PackagesScreen(Screen):
             return self._packages[row_key]
         return None
 
-    def action_install(self) -> None:
+    def _selected_packages(self) -> list:
+        """Marcadas (si las hay) o, en su defecto, la fila del cursor.
+
+        Sin marcas el flujo de una sola fila queda exactamente como estaba.
+        """
+        if self._marked:
+            return [self._packages[index] for index in sorted(self._marked)
+                    if 0 <= index < len(self._packages)]
         pkg = self._selected_package()
-        if pkg:
-            self.app.push_screen(
-                ConfirmScreen(f'{t("packages.install_confirm")} {pkg.name}?'),
-                self._do_install)
+        return [pkg] if pkg is not None else []
+
+    def action_toggle_mark(self) -> None:
+        """Espacio: marca/desmarca la fila actual conservando el cursor."""
+        table = self.query_one('#packages-table', DataTable)
+        index = table.cursor_row
+        if not (0 <= index < len(self._packages)):
+            return
+        if index in self._marked:
+            self._marked.discard(index)
+        else:
+            self._marked.add(index)
+        self._fill(self._packages, self._origin, keep_marks=True)
+        self.query_one('#packages-table', DataTable).move_cursor(row=index)
+
+    def _take_pending(self, confirmed) -> list:
+        """Devuelve el lote confirmado; cancelar no ejecuta ni deja pendiente."""
+        if not confirmed:
+            self._pending = []
+            return []
+        pkgs = self._pending or self._selected_packages()
+        self._pending = []
+        return pkgs
+
+    def action_install(self) -> None:
+        pkgs = self._selected_packages()
+        if not pkgs:
+            return
+        self._pending = pkgs
+        message = (t('packages.install_many_confirm', n=len(pkgs))
+                   if len(pkgs) > 1
+                   else f'{t("packages.install_confirm")} {pkgs[0].name}?')
+        self.app.push_screen(ConfirmScreen(message), self._do_install)
 
     def _do_install(self, confirmed) -> None:
-        if not confirmed:
-            return
-        pkg = self._selected_package()
-        self._run_action(pkg, 'install')
+        pkgs = self._take_pending(confirmed)
+        if pkgs:
+            self._run_action(pkgs, 'install')
 
     def action_remove(self) -> None:
-        pkg = self._selected_package()
-        if pkg:
-            self.app.push_screen(
-                ConfirmScreen(f'{t("packages.remove_confirm")} {pkg.name}?'),
-                self._do_remove)
+        pkgs = self._selected_packages()
+        if not pkgs:
+            return
+        self._pending = pkgs
+        message = (t('packages.remove_many_confirm', n=len(pkgs))
+                   if len(pkgs) > 1
+                   else f'{t("packages.remove_confirm")} {pkgs[0].name}?')
+        self.app.push_screen(ConfirmScreen(message), self._do_remove)
 
     def _do_remove(self, confirmed) -> None:
-        if not confirmed:
-            return
-        pkg = self._selected_package()
-        self._run_action(pkg, 'remove')
+        pkgs = self._take_pending(confirmed)
+        if pkgs:
+            self._run_action(pkgs, 'remove')
 
     @work(thread=True, exclusive=False)
-    def _run_action(self, pkg, action: str) -> None:
+    def _run_action(self, packages, action: str) -> None:
+        """Instala/remueve todo el lote y recarga la tabla una sola vez."""
+        pkgs = (list(packages) if isinstance(packages, (list, tuple))
+                else [packages])
         self.app.call_from_thread(
             lambda: setattr(self.query_one('#packages-loading', LoadingIndicator),
                             'display', True))
+        ok_all = True
         try:
-            if action == 'install':
-                ok = self.services.package_manager.install_package(pkg.name, confirm=False)
-                key = 'packages.install_ok'
+            for pkg in pkgs:
+                if action == 'install':
+                    ok = self.services.package_manager.install_package(
+                        pkg.name, confirm=False)
+                else:
+                    ok = self.services.package_manager.remove_package(
+                        pkg.name, confirm=False)
+                ok_all = ok_all and bool(ok)
+            if len(pkgs) == 1:
+                key = ('packages.install_ok' if action == 'install'
+                       else 'packages.remove_ok')
+                message = (t(key, name=pkgs[0].name) if ok_all
+                           else t('packages.action_failed'))
             else:
-                ok = self.services.package_manager.remove_package(pkg.name, confirm=False)
-                key = 'packages.remove_ok'
-            message = t(key, name=pkg.name) if ok else t('packages.action_failed')
+                key = ('packages.install_many_ok' if action == 'install'
+                       else 'packages.remove_many_ok')
+                message = (t(key, n=len(pkgs)) if ok_all
+                           else t('packages.action_failed'))
             self.app.call_from_thread(self.notify, message,
-                                      severity='information' if ok else 'error')
+                                      severity='information' if ok_all else 'error')
         except Exception as exc:
             logger.exception('acción de paquete falló')
             self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
                                       severity='error')
         finally:
-            # Flujo coherente: notify → recargar tabla → ocultar indicador.
-            # La recarga usa el worker actual (sin anidar otros workers).
+            # Un solo aviso y una sola recarga para todo el lote: las marcas
+            # ya no aplican después de la acción.
+            self.app.call_from_thread(self._marked.clear)
             self._fetch_installed()
 
     def action_info(self) -> None:
@@ -341,6 +470,19 @@ class PackagesScreen(Screen):
 class ProcessesScreen(Screen):
     """Monitor de procesos con refresco por intervalo configurable."""
 
+    # 1.1-D: 's' cicla en este orden. cpu/mem siguen siendo los dos primeros
+    # para no cambiar el comportamiento ya conocido de la versión 1.0.
+    SORT_CRITERIA = ('cpu', 'mem', 'user', 'name', 'pid')
+    SORT_KEYS = {
+        # El PID desempata para que el orden sea estable entre ciclos de 's'.
+        'cpu': lambda p: (p.cpu, p.pid),
+        'mem': lambda p: (p.mem, p.pid),
+        'user': lambda p: (p.user, p.pid),
+        'name': lambda p: (p.command, p.pid),
+        'pid': lambda p: p.pid,
+    }
+    SORT_ASCENDING = frozenset({'user', 'name'})
+
     BINDINGS = [
         ('k', 'kill', t('processes.kill')),
         ('K', 'kill9', t('processes.kill9')),
@@ -357,13 +499,15 @@ class ProcessesScreen(Screen):
         super().__init__()
         self.services = services
         self._processes = []
+        self._raw_processes = []   # fuente sin ordenar, para recalcular 's'
         self._paused = False
         self._filter = ''
         self._sort = 'cpu'
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("processes.title")}[/]', classes='title')
+        yield Label(f'[b]{screen_icon("ProcessesScreen")} {t("processes.title")}[/]',
+                    classes='title')
         yield Input(placeholder=t('common.filter'), id='proc-filter')
         yield DataTable(id='process-table')
         yield Static(t('processes.keys'), id='process-status', classes='status', markup=False)
@@ -401,10 +545,13 @@ class ProcessesScreen(Screen):
         # descartar el resultado en vez de fallar con NoMatches.
         if not self.is_mounted:
             return
-        if self._sort == 'mem':
-            ordered = sorted(processes, key=lambda p: p.mem, reverse=True)
-        else:
-            ordered = sorted(processes, key=lambda p: p.cpu, reverse=True)
+        self._raw_processes = list(processes)
+        criterion = (self._sort if self._sort in self.SORT_CRITERIA else 'cpu')
+        ordered = sorted(
+            processes,
+            key=self.SORT_KEYS[criterion],
+            reverse=criterion not in self.SORT_ASCENDING,
+        )
         self._processes = list(ordered)
         table = self.query_one('#process-table', DataTable)
         table.clear()
@@ -429,8 +576,11 @@ class ProcessesScreen(Screen):
         inp.cursor_position = len(inp.value)
 
     def action_sort(self) -> None:
-        self._sort = 'mem' if self._sort == 'cpu' else 'cpu'
-        self._fill(self._processes)
+        """s: cicla cpu → mem → user → name → pid → cpu."""
+        criterion = (self._sort if self._sort in self.SORT_CRITERIA else 'cpu')
+        index = self.SORT_CRITERIA.index(criterion)
+        self._sort = self.SORT_CRITERIA[(index + 1) % len(self.SORT_CRITERIA)]
+        self._fill(self._raw_processes)
 
     def pause_polling(self) -> None:
         """Pausa el sondeo: se detiene el timer y `_tick` no hace nada."""
@@ -561,9 +711,17 @@ class SettingsScreen(Screen):
         super().__init__()
         self.services = services
 
+    @staticmethod
+    def _note_text() -> str:
+        """Nota de Ajustes: específica de Termux solo cuando procede."""
+        if DistributionDetector.is_termux():
+            return t('settings.termux_note')
+        return t('settings.generic_note')
+
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("settings.title")}[/]', classes='title')
+        yield Label(f'[b]{screen_icon("SettingsScreen")} {t("settings.title")}[/]',
+                    classes='title')
         yield VerticalScroll(
             Label(f'[b]{t("settings.tui_theme")}[/]'),
             Static(t('settings.theme_help'), classes='hint', markup=False),
@@ -573,6 +731,17 @@ class SettingsScreen(Screen):
                 id='select-theme',
                 prompt=t('settings.tui_theme'),
                 allow_blank=False,
+                classes='select-compact',
+            ),
+            Label(f'[b]{t("settings.theme_source")}[/]'),
+            Static(t('settings.theme_source_help'), classes='hint', markup=False),
+            Select(
+                [('Manual', 'manual'), ('Matugen (dinámico)', 'mutagen')],
+                value=self.services.config.get_theme_source(),
+                id='select-theme-source',
+                prompt=t('settings.theme_source'),
+                allow_blank=False,
+                classes='select-compact',
             ),
             Label(f'[b]{t("common.language")}[/]'),
             Static(t('settings.language_help'), classes='hint', markup=False),
@@ -582,12 +751,16 @@ class SettingsScreen(Screen):
                 id='select-language',
                 prompt=t('common.language'),
                 allow_blank=False,
+                classes='select-compact',
             ),
             Label(f'[b]{t("settings.refresh_interval")}[/]'),
             Static(t('settings.interval_help'), classes='hint', markup=False),
             Input(value=str(self.services.config.get('refresh_interval', 2)),
                   id='input-interval', placeholder=t('settings.refresh_interval')),
-            Static(t('settings.termux_note'), id='settings-note', classes='status', markup=False),
+            # 1.1-B: el aviso de Termux solo aparece en Termux/Android; en
+            # el resto de sistemas se muestra una nota neutra y legible.
+            Static(self._note_text(), id='settings-note', classes='status',
+                   markup=False),
         )
         yield Footer()
 
@@ -600,6 +773,11 @@ class SettingsScreen(Screen):
         self.services.config.set_theme(name)
         self.services.theme_manager.set_theme(name)
         self.app.apply_tui_theme(name)
+        self.notify(t('settings.saved'))
+
+    @on(Select.Changed, '#select-theme-source')
+    def theme_source_changed(self, event: Select.Changed) -> None:
+        self.services.config.set_theme_source(str(event.value))
         self.notify(t('settings.saved'))
 
     @on(Select.Changed, '#select-language')
@@ -666,7 +844,8 @@ class HelpScreen(Screen):
             lines += [t(key) for key in keys]
         lines += ['', t('help.doctor_hint'), t('settings.termux_note')]
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("help.title")}[/]', classes='title')
+        yield Label(f'[b]{screen_icon("HelpScreen")} {t("help.title")}[/]',
+                    classes='title')
         with VerticalScroll():
             yield Static('\n'.join(lines), id='help-text', markup=False)
         yield Footer()
@@ -706,7 +885,8 @@ class ThemesScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("themes.title")}[/]', classes='title')
+        yield Label(f'[b]{screen_icon("ThemesScreen")} {t("themes.title")}[/]',
+                    classes='title')
         yield ListView(id='themes-list')
         yield Static(t('themes.keys'), id='themes-status', classes='status', markup=False)
         yield Footer()
@@ -913,7 +1093,8 @@ class UpdatesScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("updates.title")}[/]', classes='title')
+        yield Label(f'[b]{screen_icon("UpdatesScreen")} {t("updates.title")}[/]',
+                    classes='title')
         yield DataTable(id='updates-table')
         yield Static(t('updates.checking'), id='updates-status', classes='status', markup=False)
         yield Footer()
@@ -1092,8 +1273,8 @@ class SystemScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("system.title")}[/] — {type(self.services.environment).__name__}',
-                    classes='title')
+        yield Label(f'[b]{screen_icon("SystemScreen")} {t("system.title")}[/] — '
+                    f'{type(self.services.environment).__name__}', classes='title')
         yield ListView(id='system-menu')
         yield Static(t('system.keys'), id='system-status', classes='status', markup=False)
         yield Footer()
@@ -1216,7 +1397,8 @@ class AboutScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("about.title")}[/]', classes='title')
+        yield Label(f'[b]{screen_icon("AboutScreen")} {t("about.title")}[/]',
+                    classes='title')
         with VerticalScroll():
             yield LoadingIndicator(id='about-loading')
             yield Static(t('common.loading'), id='about-text', markup=False)
@@ -1267,8 +1449,15 @@ class AboutScreen(Screen):
             self._line(t('about.shell'), info.get('shell')),
             self._line(t('about.term'), info.get('term')),
             self._line(t('about.packages'), pkg_text),
+            self._line(t('about.os_version'), info.get('os_version')),
+            self._line(t('about.device_name'), info.get('device_name')),
+            self._line(t('about.device_type'), info.get('device_type')),
+            self._line(t('about.pm'), info.get('package_manager')),
+            self._line(t('about.session'), info.get('session')),
+            self._line(t('about.displays'), ', '.join(info.get('displays') or [])),
             '',
             f'{sep} {t("about.section.hardware")} {sep}',
+            self._line(t('about.gpu'), info.get('gpu')),
             self._line(t('about.cpu_model'), info.get('cpu_model')),
             self._line(t('about.cpu_logical'), info.get('cpu_logical')),
             self._line(t('about.cpu_physical'), info.get('cpu_physical')),
@@ -1308,7 +1497,8 @@ class LogsScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("logs.title")}[/]', classes='title')
+        yield Label(f'[b]{screen_icon("LogsScreen")} {t("logs.title")}[/]',
+                    classes='title')
         with VerticalScroll():
             yield Static('…', id='log-text', markup=False)
         yield Static('', id='logs-status', classes='status', markup=False)
@@ -1461,7 +1651,8 @@ class AppsScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Label(f'[b]{t("apps.title")}[/]', classes='title')
+        yield Label(f'[b]{screen_icon("AppsScreen")} {t("apps.title")}[/]',
+                    classes='title')
         yield Input(placeholder=t('common.search'), id='apps-search')
         yield Select(
             [(name, key) for key, name in self.adapter.categories().items()],

@@ -4,6 +4,26 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ---
 
+## [1.1.0] — 2026-11-19 — Interfaz, lote, orden y tema dinámico (completada)
+
+### Agregado
+- **1.1-A**: iconos Unicode con fallback ASCII (`TERM=dumb`); Selects compactos
+  en Ajustes (`width: 34; max-width: 60%`).
+- **1.1-B**: el aviso de Termux solo aparece en Termux; nota neutra en otros SO.
+- **1.1-C**: selección múltiple con `Espacio` en Aplicaciones; install/remove por
+  lote con una sola confirmación y una sola recarga.
+- **1.1-D**: procesos ordenables por cpu, memoria, usuario, nombre y PID.
+- **1.1-E**: `theme_source: manual|mutagen`; lector del `matugen.json` real de
+  OpenCode/Noctalia y mapeo a paleta textual. El tema del escritorio sigue siendo
+  de Noctalia.
+- **1.1-F**: Acerca de con versión de SO, dispositivo, tipo, GPU, gestor de
+  paquetes, sesión y pantallas, estilo fastfetch.
+
+### Validación
+- **361 tests verdes**, py_compile OK. Formato matugen verificado en 3 laptops.
+
+---
+
 ## [1.0.0] — 2026-11-19 — 1.0 Estable (completada)
 
 No añade funciones: declara estabilidad tras cumplir los 15 criterios del roadmap
