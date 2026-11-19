@@ -20,6 +20,25 @@ from tui_manager.core.pkgsrc_adapter import PkgsrcAdapter
 from tui_manager.i18n import t, set_language, get_language, available_languages
 
 
+# ---- Runners simulados para sysinfo (nunca ejecutan subprocess real) -------
+
+def _no_subprocess(cmd, timeout=5):
+    """Runner que falla limpiamente: fuerza degrade honesto a '' / []."""
+    return 1, '', ''
+
+
+class _ScriptedRunner:
+    """Devuelve (rc, stdout, stderr) por comando; el resto falla limpio."""
+
+    def __init__(self, script=None):
+        self.script = {tuple(k): v for k, v in (script or {}).items()}
+        self.calls = []
+
+    def __call__(self, cmd, timeout=5):
+        self.calls.append(tuple(cmd))
+        return self.script.get(tuple(cmd), (1, '', ''))
+
+
 # ---------------- Detección de distribución ----------------
 
 def test_detect_termux(monkeypatch):
@@ -453,7 +472,8 @@ def test_sysinfo_collect(tmp_path, monkeypatch):
     info = si.collect(distribution='freebsd',
                       environment=type('E', (), {'name': 'tty'})(),
                       system_control=None, package_manager=FakePM(),
-                      os_release='FreeBSD 14.2 (amd64)')
+                      os_release='FreeBSD 14.2 (amd64)',
+                      runner=_no_subprocess, pm_name='pkg')
     assert info['distro'] == 'freebsd'
     assert info['environment'] == 'tty'
     assert info['packages'] == 3
@@ -472,7 +492,8 @@ def test_sysinfo_battery_and_ram(tmp_path, monkeypatch):
                         real_open(tmp_path / 'meminfo', *a, **k)
                         if path == '/proc/meminfo'
                         else real_open(path, *a, **k))
-    info = si.collect(system_control=Sc())
+    info = si.collect(system_control=Sc(),
+                      runner=_no_subprocess, pm_name='apt')
     assert info['ram'] == '16000 MB'
     assert info['battery']['percent'] == '55'
 
@@ -544,7 +565,8 @@ def test_sysinfo_extended_fields(monkeypatch):
     """Acerca de expone campos amplios de hardware y software."""
     import tui_manager.core.sysinfo as si
     info = si.collect(distribution='arch',
-                      environment=type('E', (), {'name': 'sway'})())
+                      environment=type('E', (), {'name': 'sway'})(),
+                      runner=_no_subprocess, pm_name='pacman')
     expected = ('hostname', 'user', 'platform', 'arch', 'python', 'shell',
                 'term', 'uptime', 'cpu_model', 'cpu_logical', 'cpu_physical',
                 'ram_total', 'ram_available', 'swap', 'disk_total',
@@ -553,3 +575,134 @@ def test_sysinfo_extended_fields(monkeypatch):
         assert key in info, f'falta campo {key}'
     assert info['cpu_logical'] >= 1
     assert isinstance(info['disk_percent'], int)
+
+
+# ---------------- 1.1-F: campos estilo fastfetch en sysinfo ----------------
+
+def test_sysinfo_fastfetch_fields_present():
+    import tui_manager.core.sysinfo as si
+    info = si.collect(runner=_no_subprocess, pm_name='pkg')
+    for key in ('os_version', 'device_name', 'device_type', 'gpu',
+                'package_manager', 'displays', 'session', 'shell', 'uptime'):
+        assert key in info, f'falta campo {key}'
+    assert info['displays'] == []
+    assert isinstance(info['session'], str)
+
+
+def test_sysinfo_os_version_sources():
+    import tui_manager.core.sysinfo as si
+    text = 'ID=arch\nVERSION_ID="rolling"\nPRETTY_NAME="Arch Linux"\n'
+    assert si.collect(runner=_no_subprocess, pm_name='x',
+                      os_release_text=text)['os_version'] == 'rolling'
+    assert si.collect(runner=_no_subprocess, pm_name='x',
+                      os_release_text='VERSION=7\n')['os_version'] == '7'
+    assert si.collect(runner=_no_subprocess, pm_name='x',
+                      os_release_text='PRETTY_NAME="Foo Linux"\n')['os_version'] == 'Foo Linux'
+    assert si.collect(runner=_no_subprocess, pm_name='x',
+                      os_release_text='')['os_version'] == ''
+
+
+def test_sysinfo_device_name_termux(monkeypatch):
+    import tui_manager.core.sysinfo as si
+    monkeypatch.setenv('TERMUX_VERSION', '0.118.0')
+    runner = _ScriptedRunner({
+        ('getprop', 'ro.product.model'): (0, 'Pixel 7\n', ''),
+    })
+    info = si.collect(runner=runner, pm_name='pkg')
+    assert info['device_name'] == 'Pixel 7'
+    assert ('getprop', 'ro.product.model') in runner.calls
+    # sin dato de getprop → hostname (degrada, sin falsedades)
+    assert si.collect(runner=_no_subprocess, pm_name='pkg')['device_name']
+
+
+def test_sysinfo_device_type(monkeypatch, tmp_path):
+    import tui_manager.core.sysinfo as si
+    monkeypatch.delenv('TERMUX_VERSION', raising=False)
+
+    vm = _ScriptedRunner({('systemd-detect-virt',): (0, 'kvm\n', '')})
+    assert si.collect(runner=vm, pm_name='x')['device_type'] == 'VM'
+
+    chassis = tmp_path / 'chassis'
+    chassis.write_text('10\n')
+    monkeypatch.setattr(si, 'DMI_CHASSIS_PATH', str(chassis))
+    novirt = _ScriptedRunner({('systemd-detect-virt',): (0, 'none\n', '')})
+    assert si.collect(runner=novirt, pm_name='x')['device_type'] == 'laptop'
+    chassis.write_text('3\n')
+    assert si.collect(runner=novirt, pm_name='x')['device_type'] == 'desktop'
+    chassis.write_text('99\n')
+    assert si.collect(runner=novirt, pm_name='x')['device_type'] == ''
+
+    monkeypatch.setenv('TERMUX_VERSION', '0.1')
+    assert si.collect(runner=_no_subprocess, pm_name='pkg')['device_type'] == 'Termux'
+
+
+def test_sysinfo_gpu_sources(monkeypatch):
+    import tui_manager.core.sysinfo as si
+    monkeypatch.delenv('TERMUX_VERSION', raising=False)
+
+    lspci = _ScriptedRunner({('lspci',): (0,
+        '00:02.0 VGA compatible controller: Intel Corporation UHD Graphics 620\n'
+        '00:1f.6 Network controller: Realtek Semiconductor\n', '')})
+    assert 'Intel Corporation UHD Graphics 620' in si.collect(
+        runner=lspci, pm_name='x')['gpu']
+
+    monkeypatch.setattr(si.platform, 'system', lambda: 'FreeBSD')
+    bsd = _ScriptedRunner({('sysctl', '-n', 'hw.model'): (0, 'AMD Ryzen 9\n', '')})
+    assert si.collect(runner=bsd, pm_name='x')['gpu'] == 'AMD Ryzen 9'
+
+    monkeypatch.setattr(si.platform, 'system', lambda: 'Linux')
+    monkeypatch.setenv('TERMUX_VERSION', '0.1')
+    termux = _ScriptedRunner({('getprop', 'ro.gpu'): (0, 'Adreno 640\n', '')})
+    assert si.collect(runner=termux, pm_name='pkg')['gpu'] == 'Adreno 640'
+
+    monkeypatch.delenv('TERMUX_VERSION', raising=False)
+    assert si.collect(runner=_no_subprocess, pm_name='x')['gpu'] == ''
+
+
+def test_sysinfo_displays_sources():
+    import json
+    import tui_manager.core.sysinfo as si
+
+    hypr = _ScriptedRunner({('hyprctl', 'monitors'): (0,
+        'Monitor eDP-1 (ID 1):\n   1920x1080@60.00000Hz\n', '')})
+    assert si.collect(runner=hypr, pm_name='x')['displays'] == [
+        'eDP-1 1920x1080@60.00000Hz']
+
+    sway_out = json.dumps([{'name': 'HDMI-A-1',
+                            'rect': {'width': 2560, 'height': 1440}}])
+    sway = _ScriptedRunner({('swaymsg', '-t', 'get_outputs'): (0, sway_out, '')})
+    assert si.collect(runner=sway, pm_name='x')['displays'] == [
+        'HDMI-A-1 2560x1440']
+
+    xrandr = _ScriptedRunner({('xrandr', '--query'): (0,
+        'Screen 0: minimum 8 x 8\n'
+        'HDMI-1 connected primary 1920x1080+0+0 344mm x 194mm\n', '')})
+    assert si.collect(runner=xrandr, pm_name='x')['displays'] == [
+        'HDMI-1 1920x1080']
+
+    assert si.collect(runner=_no_subprocess, pm_name='x')['displays'] == []
+
+
+def test_sysinfo_session_and_shell_uptime(monkeypatch):
+    import tui_manager.core.sysinfo as si
+    monkeypatch.setenv('XDG_SESSION_TYPE', 'wayland')
+    monkeypatch.setenv('XDG_CURRENT_DESKTOP', 'sway')
+    monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
+    monkeypatch.setenv('SHELL', '/bin/zsh')
+    info = si.collect(runner=_no_subprocess, pm_name='x')
+    assert info['session'] == 'wayland · sway · wayland-1'
+    assert info['shell'] == '/bin/zsh'
+    assert isinstance(info['uptime'], str)
+
+    for key in ('XDG_SESSION_TYPE', 'XDG_CURRENT_DESKTOP', 'WAYLAND_DISPLAY'):
+        monkeypatch.delenv(key, raising=False)
+    assert si.collect(runner=_no_subprocess, pm_name='x')['session'] == ''
+
+
+def test_sysinfo_package_manager_from_detector(monkeypatch):
+    import tui_manager.core.sysinfo as si
+    from tui_manager.core.distribution import DistributionDetector
+    monkeypatch.setattr(DistributionDetector, 'get_package_manager',
+                        staticmethod(lambda: 'pacman'))
+    assert si.collect(runner=_no_subprocess)['package_manager'] == 'pacman'
+    assert si.collect(runner=_no_subprocess, pm_name='xbps')['package_manager'] == 'xbps'
