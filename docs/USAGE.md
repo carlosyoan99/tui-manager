@@ -184,6 +184,25 @@ Puedes forzar una actualización presionando `F5` o `R`.
    - Light (claro)
    - Retro (retro)
 
+> **Alcance del Select de tema:** el selector de la TUI cambia **solo los
+> colores de esta aplicación**. El tema del escritorio lo gestiona
+> **Noctalia**, no TUI Manager; cambiar uno no altera el otro.
+
+### Tema dinámico con matugen
+
+Si quieres que la TUI siga el esquema generado desde tu wallpaper (el mismo
+que usan OpenCode/Noctalia), activa la fuente `mutagen` en tu
+`~/.tui-manager/config.yaml`:
+
+```yaml
+theme_source: mutagen
+```
+
+Con esa opción la TUI lee `~/.config/opencode/themes/matugen.json` y traduce
+sus colores a la paleta textual. Si el archivo no existe o es inválido, se
+usa el tema `manual` sin errores. Para volver al tema fijo, pon
+`theme_source: manual`.
+
 ### Configuración de Actualización
 
 En la configuración puedes ajustar:

@@ -2,6 +2,7 @@
 # Copia a ~/.tui-manager/config.yaml y edita lo que quieras.
 
 theme: dark                # tema interno de la TUI: dark | light | retro
+theme_source: manual       # origen del tema: manual | mutagen (matugen/OpenCode)
 language: es               # i18n: es | en
 auto_update: true
 refresh_interval: 2        # segundos entre refrescos de procesos

@@ -20,6 +20,7 @@ class Config:
 
     DEFAULT_CONFIG = {
         'theme': 'dark',
+        'theme_source': 'manual',  # manual | mutagen
         'language': 'es',
         'auto_update': True,
         'refresh_interval': 2,
@@ -166,6 +167,17 @@ class Config:
     def set_theme(self, theme_name: str):
         """Establece el tema"""
         self.set('theme', theme_name)
+
+    def get_theme_source(self) -> str:
+        """Obtiene la fuente del tema (``manual`` o ``mutagen``)."""
+        source = self.get('theme_source', 'manual')
+        return source if source in ('manual', 'mutagen') else 'manual'
+
+    def set_theme_source(self, source: str):
+        """Establece la fuente del tema; valores inválidos caen en ``manual``."""
+        if source not in ('manual', 'mutagen'):
+            source = 'manual'
+        self.set('theme_source', source)
 
     def get_refresh_interval(self) -> int:
         """Obtiene el intervalo de actualización"""
