@@ -3,6 +3,17 @@
 > **Fecha:** 2026-11-19 · **Contexto:** TUI Manager 1.0.0, 333 tests en 4 hosts, 82 % cobertura.
 > **Fuentes:** el propio repo (`ROADMAP.md`, `QA-REPORT.md`, `RETROSPECTIVA.md`), las decisiones de Omarchy adoptadas (A–I), y el estado real del ecosistema TUI (btop, lazygit, yazi, fastfetch, micro). No es promoción: es una lista de brechas accionables.
 
+> **Nota de estado (2026-11-20):** este documento refleja el diagnóstico de 1.0.
+> Las brechas «CI solo escrita, no ejecutada», «Sin onboarding guiado»,
+> «Sin salida para scripts/agentes», «Comunidad» (sección 2) y el punto 6 de
+> la sección 4 **ya están resueltas en 1.2**: `tm --quickstart` (1.2-A),
+> `--json` para `packages`/`processes`/`doctor` (1.2-B),
+> CONTRIBUTING/SECURITY/CODE_OF_CONDUCT (1.2-C) y workflow de CI (1.2-D).
+> La CI de GitHub está **verificada en verde** en Linux 3.10–3.13 y FreeBSD
+> 13.4/14.2 (antes solo estaba escrita; `137db1d`, `5a3ef7f` y `3906866`
+> corrigieron la matriz). Sigue pendiente y requiere permiso explícito la
+> **publicación** en PyPI/AUR/copr.
+
 ---
 
 ## 1. Diferenciador actual (ya lo tenemos)

@@ -267,19 +267,38 @@ Adoptadas al roadmap (2026-11-18) como fase siguiente a 1.0. Se priorizarán des
 
 ---
 
-## 2.0 — macOS y Windows (planeada)
+## 2.0 — macOS y Windows (en curso, vía betas)
 
-Soporte **nativo** a macOS y Windows, extendiendo los dos planos de adaptadores (SO y entorno) definidos en la spec técnica. No forma parte de los criterios de 1.0.
+Soporte **nativo** a macOS y Windows, extendiendo los dos planos de adaptadores (SO y entorno) definidos en la spec técnica. No forma parte de los criterios de 1.0. La versión 2.0 **no se declara** hasta que las tres betas estén cerradas.
 
-### macOS
+> **Nota de validación (2026-11-20):** entre los hosts del usuario no hay macOS
+> ni Windows (3 laptops Linux + Termux). Por tanto **macOS y Windows se validan
+> por simulación** (tests con subprocesos simulados), no en máquinas reales.
+> Una futura prueba en hardware real sería una verificación adicional, no un
+> requisito para cerrar las betas mientras ese hardware no exista.
+
+### Estado de las betas
+
+| Beta | Versión | Contenido | Estado |
+|---|---|---|---|
+| **A** | `2.0.0-beta.1` | Accesibilidad mouse/táctil en modales y elevación sudo segura | ✅ **completada** — ver `docs/QA-REPORT.md` y `docs/PLAN-2.0-BETAS.md` |
+| **B** | `2.0.0-beta.2` | Adapters macOS (Homebrew/`defaults`/`osascript`) y Windows (winget/scoop/choco, `tasklist`) simulados | 🔄 **en curso** |
+| **C** | `2.0.0-beta.3` | Integración final, documentación 2.0 y correcciones de campo | 🔄 **en curso** |
+
+### macOS *(en curso, simulado)*
 - **Paquetes**: `MacOSAdapter` (Homebrew: `brew search/info/install/remove`, `brew update/upgrade`; `brew services` opcional).
 - **Entorno**: `MacOSAdapter` de entorno — wallpaper vía `osascript`, modo oscuro vía `defaults write -g AppleInterfaceStyle`, launch-or-focus con `open -a`.
 - **Procesos**: `ps`/`kill` nativos (BSD userland — el ProcessMonitor ya es portable a BSD ps).
 
-### Windows
+### Windows *(en curso, simulado)*
 - **Paquetes**: `WindowsAdapter` con detección en orden winget → scoop → choco (`winget search/install/uninstall`, `scoop install`, `choco`).
 - **Procesos**: `tasklist`/`taskkill` (y PowerShell `Get-Process`) detrás del mismo ProcessMonitor.
 - **Entorno**: `WindowsAdapter` — personalización vía registro (`HKCU\Software\Microsoft\Windows\CurrentVersion\Themes`), wallpaper vía `win32` API, terminal Windows.
 - **Requisito**: textual corre en Windows Terminal; la TUI debe validar capacidades de consola.
 
-Criterios de salida: se definirán al promover la fase; primer objetivo es Alfa-equivalente (paquetes + procesos) en cada SO.
+### Criterios de salida verificables
+
+1. **Beta A (cerrada):** botones clicables en los modales (Sí/No, Aceptar/Cancelar, Cancelar), clic en la columna «Marcar», `Select` de orden de procesos y botón `?`, con los atajos de teclado intactos; `sudo -n` con caché y `App.suspend()` + `sudo -v` en TTY real (`doas` en BSD), sin credenciales guardadas. Suite: 399 tests verdes en notebook, laptop y void; móvil en verificación. CI de GitHub verde en Linux 3.10–3.13 y FreeBSD 13.4/14.2.
+2. **Beta B (en curso):** tests simulados de detección y operaciones de paquetes/procesos para macOS y Windows, sin afirmar resultados en hardware real. Solo se marca completada cuando la suite simulada pase en la matriz de CI.
+3. **Beta C (en curso):** documentación 2.0 al día (README, ROADMAP, PLAN-2.0-BETAS, QA-REPORT e INVESTIGACION-MERCADO) sin funcionalidades fantasma; integración de lo entregado en A y B y correcciones de campo; suite completa verde en los hosts disponibles y CI verde en la matriz indicada.
+4. **2.0 final:** solo si A, B y C están cerradas y se cumple el criterio 13 de 1.0 (ninguna contraseña en claro). Publicación fuera de alcance sin permiso explícito.

@@ -249,3 +249,31 @@ sigue siendo tema de Noctalia; el Select de la TUI solo afecta a textual.
 > Replicado y verificado en los 4 hosts en `5d27f49`: notebook, laptop, void y
 > móvil, **379 tests verdes en cada uno**. La CI en GitHub sigue sin ejecutarse
 > (requiere permiso explícito del usuario).
+
+---
+
+# QA-REPORT — Beta A (2.0.0-beta.1) «Accesibilidad táctil y sudo seguro»
+
+**Fecha:** 2026-11-20 · **Commit funcional:** `b19a00c` · **CI:** `137db1d`, `5a3ef7f`, `3906866`.
+
+| Subtarea | Verificación | Estado |
+|---|---|---|
+| A1 modales clicables | Botones **Sí/No**, **Aceptar/Cancelar** y **Cancelar**; clic simulado verifica `dismiss`; atajos `y/n`, `Enter`, `Esc` siguen funcionando | ✅ |
+| A2 auditoría táctil | Clic en la columna «Marcar», `Select` de orden de procesos y botón `?` | ✅ |
+| A3 sudo seguro | `sudo -n` si hay caché; si no, `App.suspend()` + `sudo -v` en TTY real; `doas` en BSD; sin credenciales guardadas ni contraseña por argumento | ✅ tests simulados + verificación manual |
+| A4 cierre | Versión `2.0.0-beta.1`, suite y QA documentados | ✅ |
+
+## Matriz de hosts
+
+| Host | SO | Tests | Resultado |
+|---|---|---|---|
+| Notebook | CachyOS (Arch) | ✅ 399 | ✅ verde |
+| laptop | CachyOS (Arch) | ✅ 399 | ✅ verde |
+| void | Void Linux | ✅ 399 | ✅ verde |
+| móvil | Termux/Android | en verificación | ⏳ **en verificación** (sin resultado: no se afirma verde) |
+
+**CI de GitHub:** verificada en verde en Linux 3.10–3.13 y FreeBSD 13.4/14.2.
+
+**Observación:** no se incluyen resultados de macOS/Windows: la Beta B está en curso y esos SO se validan por simulación (no hay macOS ni Windows entre los hosts del usuario). El CHANGELOG lo gestiona el usuario.
+
+> ## ✅ BETA A — ACEPTAR (notebook, laptop y void; móvil pendiente de verificación)

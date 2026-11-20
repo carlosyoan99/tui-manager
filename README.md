@@ -34,6 +34,12 @@ Su propósito: desde un solo menú jerárquico, navegable 100 % por teclado, pod
 | Parcial | **DEs**: KDE Plasma, GNOME, XFCE, MATE, Cinnamon, LXQt | Solo lo que el DE expone por herramienta propia |
 | Básico | **TTY / sin entorno** | Paquetes, procesos, tema interno de la TUI |
 
+## Novedades 2.0
+
+- **Accesibilidad táctil y mouse:** modales con botones clicables (Sí/No, Aceptar/Cancelar, Cancelar), clic en la columna «Marcar», `Select` de orden de procesos y botón `?`. Los atajos de teclado siguen funcionando.
+- **sudo seguro:** usa `sudo -n` si hay credenciales en caché; si no, suspende la TUI y solicita la contraseña con `sudo -v` en el TTY real (`doas` en BSD). La contraseña nunca se guarda ni se pasa por argumento.
+- **Estado:** `2.0.0-beta.1` (Beta A completada) — 399 tests verdes en notebook, laptop y void; móvil en verificación; CI de GitHub verde en Linux 3.10–3.13 y FreeBSD 13.4/14.2. Los adapters de **macOS y Windows están en progreso** dentro de la fase 2.0 (validación por simulación, aún no en esos SO). Ver [ROADMAP](docs/ROADMAP.md), [QA-REPORT](docs/QA-REPORT.md) y [PLAN-2.0-BETAS](docs/PLAN-2.0-BETAS.md).
+
 ## Funcionamiento
 
 ### Arquitectura en capas
@@ -136,7 +142,7 @@ TUI-Manager/
 
 ## Estado
 
-**1.2.0** — onboarding (`tm --quickstart`), salida `--json`, comunidad y CI. Base 1.0/1.1 verificada en 4 equipos. La TUI con [textual](https://textual.textualize.io/) es funcional: paquetes, procesos, system, temas, actualizaciones, ajustes, ayuda, acerca de y logs, con degradación elegante por capacidades. Núcleo multi-SO (Linux, BSD, Termux) con 119 tests verdes. Ver [`CHANGELOG.md`](CHANGELOG.md) y [`docs/ROADMAP.md`](docs/ROADMAP.md) para el detalle de fases y criterios de salida.
+**2.0.0-beta.1** — accesibilidad táctil y sudo seguro (Beta A completada: 399 tests verdes en notebook, laptop y void; móvil en verificación; CI de GitHub verde en Linux 3.10–3.13 y FreeBSD 13.4/14.2). macOS y Windows en progreso en la fase 2.0 (simulación). Base 1.2.0: onboarding (`tm --quickstart`), salida `--json`, comunidad y CI; base 1.0/1.1 verificada en 4 equipos. La TUI con [textual](https://textual.textualize.io/) es funcional: paquetes, procesos, system, temas, actualizaciones, ajustes, ayuda, acerca de y logs, con degradación elegante por capacidades. Núcleo multi-SO (Linux, BSD, Termux) con 399 tests verdes. Ver [`CHANGELOG.md`](CHANGELOG.md) y [`docs/ROADMAP.md`](docs/ROADMAP.md) para el detalle de fases y criterios de salida.
 
 ## Licencia
 
