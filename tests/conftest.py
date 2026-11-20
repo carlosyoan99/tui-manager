@@ -40,8 +40,19 @@ class FakeRunner:
 
 @pytest.fixture
 def fake_runner(monkeypatch):
-    """Activa el simulador de subprocess para el test actual."""
+    """Activa el simulador de subprocess para el test actual.
+
+    Simula que `sudo` está disponible para que los tests de elevación sean
+    portables (en Termux/BSD no hay sudo y el código degradaría).
+    """
     runner = FakeRunner()
+    import shutil
+    real_which = shutil.which
+    def fake_which(tool, *a, **k):
+        if tool == 'sudo':
+            return '/usr/bin/sudo'
+        return real_which(tool, *a, **k)
+    monkeypatch.setattr(shutil, 'which', fake_which)
     import subprocess
     monkeypatch.setattr(subprocess, 'run', runner)
     return runner
