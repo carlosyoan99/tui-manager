@@ -75,12 +75,14 @@ def test_debian_info_not_found(fake_runner):
 
 
 def test_debian_install_confirm_false(fake_runner):
-    fake_runner.expect(['sudo', 'apt', 'install', '-y', 'curl'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'true'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'apt', 'install', '-y', 'curl'], rc=0)
     assert DebianAdapter().install_package('curl', confirm=False) is True
 
 
 def test_debian_install_failure(fake_runner):
-    fake_runner.expect(['sudo', 'apt', 'install', '-y', 'x'], rc=1, stderr='boom')
+    fake_runner.expect(['sudo', '-n', 'true'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'apt', 'install', '-y', 'x'], rc=1, stderr='boom')
     assert DebianAdapter().install_package('x', confirm=False) is False
 
 
@@ -166,8 +168,10 @@ def test_arch_info(fake_runner):
 
 
 def test_arch_install_remove(fake_runner):
-    fake_runner.expect(['sudo', 'pacman', '-S', '--noconfirm', 'git'], rc=0)
-    fake_runner.expect(['sudo', 'pacman', '-R', '--noconfirm', 'git'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'true'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'pacman', '-S', '--noconfirm', 'git'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'true'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'pacman', '-R', '--noconfirm', 'git'], rc=0)
     adapter = ArchAdapter()
     assert adapter.install_package('git', confirm=False) is True
     assert adapter.remove_package('git', confirm=False) is True
@@ -289,8 +293,10 @@ def test_void_updates(fake_runner):
 
 
 def test_void_install_remove(fake_runner):
-    fake_runner.expect(['sudo', 'xbps-install', '-y', 'git'], rc=0)
-    fake_runner.expect(['sudo', 'xbps-remove', '-y', 'git'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'true'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'xbps-install', '-y', 'git'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'true'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'xbps-remove', '-y', 'git'], rc=0)
     adapter = VoidAdapter()
     assert adapter.install_package('git', confirm=False) is True
     assert adapter.remove_package('git', confirm=False) is True
@@ -520,18 +526,20 @@ def test_debian_orphans(fake_runner):
         "Remv libfoo [1.2.3]\n"
         "Remv libbar [4.5.6]\n"
     ))
-    fake_runner.expect(['sudo', 'apt-get', 'autoremove', '-y'], rc=0,
+    fake_runner.expect(['sudo', '-n', 'true'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'apt-get', 'autoremove', '-y'], rc=0,
                         stdout="Removing libfoo...\n")
     adapter = DebianAdapter()
     orphans = adapter.get_orphans()
     assert [p.name for p in orphans] == ['libfoo', 'libbar']
     assert adapter.clean_orphans(confirm=False) is True
-    assert ('sudo', 'apt-get', 'autoremove', '-y') in fake_runner.calls
+    assert ('sudo', '-n', 'apt-get', 'autoremove', '-y') in fake_runner.calls
 
 
 def test_arch_orphans(fake_runner):
     fake_runner.expect(['pacman', '-Qtdq'], stdout="libfoo\nlibbar\n")
-    fake_runner.expect(['sudo', 'pacman', '-Rns', '--noconfirm',
+    fake_runner.expect(['sudo', '-n', 'true'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'pacman', '-Rns', '--noconfirm',
                         'libfoo', 'libbar'], rc=0)
     adapter = ArchAdapter()
     assert [p.name for p in adapter.get_orphans()] == ['libfoo', 'libbar']
@@ -548,7 +556,8 @@ def test_arch_orphans_none(fake_runner):
 def test_fedora_orphans(fake_runner):
     fake_runner.expect(['dnf', 'repoquery', '--unneeded', '--qf', '%{name}'],
                        stdout="libfoo\nlibbar\n")
-    fake_runner.expect(['sudo', 'dnf', 'autoremove', '-y'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'true'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'dnf', 'autoremove', '-y'], rc=0)
     adapter = FedoraAdapter()
     assert [p.name for p in adapter.get_orphans()] == ['libfoo', 'libbar']
     assert adapter.clean_orphans(confirm=False) is True
@@ -557,7 +566,8 @@ def test_fedora_orphans(fake_runner):
 def test_void_orphans(fake_runner):
     fake_runner.expect(['xbps-remove', '-o', '-n'],
                        stdout="libfoo-1.2_1\nlibbar-4.5_1\n")
-    fake_runner.expect(['sudo', 'xbps-remove', '-o', '-y'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'true'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'xbps-remove', '-o', '-y'], rc=0)
     adapter = VoidAdapter()
     orphans = adapter.get_orphans()
     assert [(p.name, p.version) for p in orphans] == [
@@ -567,11 +577,13 @@ def test_void_orphans(fake_runner):
 
 def test_freebsd_orphans(fake_runner, monkeypatch):
     monkeypatch.setattr(FreeBSDAdapter, '_elevator', lambda self: 'sudo')
+    fake_runner.expect(['sudo', '-n', 'true'], rc=0)
     fake_runner.expect(['sudo', 'pkg', 'autoremove', '-n'], stdout=(
         "Checking for extra packages...\n"
         "libfoo-1.2.3\n"
         "libbar-4.5\n"
     ))
+    fake_runner.expect(['sudo', '-n', 'true'], rc=0)
     fake_runner.expect(['sudo', 'pkg', 'autoremove', '-y'], rc=0)
     adapter = FreeBSDAdapter()
     orphans = adapter.get_orphans()

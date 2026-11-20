@@ -673,9 +673,10 @@ def test_void_execute_command_sudo(void, fake_runner):
     adapter.execute_command(['xbps-remove', '-n'])
     assert fake_runner.calls[-1] == ('xbps-remove', '-n')
 
-    fake_runner.expect(['sudo', 'xbps-install', '-S'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'true'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'xbps-install', '-S'], rc=0)
     adapter.execute_command(['xbps-install', '-S'])
-    assert fake_runner.calls[-1] == ('sudo', 'xbps-install', '-S')
+    assert fake_runner.calls[-1] == ('sudo', '-n', 'xbps-install', '-S')
 
 
 def test_void_installed_packages(void):
@@ -1058,15 +1059,17 @@ def test_package_adapter_execute_command(monkeypatch, fake_runner):
     from tui_manager.core.package_adapter import PackageAdapter
 
     adapter = PackageAdapter()
-    fake_runner.expect(['sudo', 'apt', 'update'], rc=0, stdout='ok')
+    fake_runner.expect(['sudo', '-n', 'true'], rc=0)
+    fake_runner.expect(['sudo', '-n', 'apt', 'update'], rc=0, stdout='ok')
     assert adapter.execute_command(['apt', 'update']) == (0, 'ok', '')
-    assert fake_runner.calls[-1] == ('sudo', 'apt', 'update')
+    assert fake_runner.calls[-1] == ('sudo', '-n', 'apt', 'update')
     fake_runner.expect(['apt', 'list'], rc=0)
     assert adapter.execute_command(['apt', 'list'], sudo=False) == (0, '', '')
 
     def timeout(*args, **kwargs):
         raise subprocess.TimeoutExpired(cmd='apt', timeout=1)
 
+    monkeypatch.setattr(adapter, '_credentials_cached', lambda tool: True)
     monkeypatch.setattr(subprocess, 'run', timeout)
     assert adapter.execute_command(['apt']) == (-1, '', 'Timeout')
 

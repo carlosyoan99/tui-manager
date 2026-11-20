@@ -9,7 +9,10 @@ temas internos (dark/light/retro de ThemeManager) como temas de textual.
 from __future__ import annotations
 
 import logging
+import shutil
+import subprocess
 from dataclasses import dataclass, field
+from typing import Optional
 
 from textual.app import App
 from textual.theme import Theme
@@ -114,7 +117,75 @@ class TuiManagerApp(App):
     def __init__(self, services: Services = None):
         super().__init__()
         self.services = services or Services.detect()
+        self._inject_elevator()
         self._register_themes()
+
+    def _elevation_tool(self) -> Optional[str]:
+        """Herramienta disponible para pedir credenciales en el TTY real."""
+        if shutil.which('sudo'):
+            return 'sudo'
+        if shutil.which('doas'):
+            return 'doas'
+        return None
+
+    def elevate(self) -> bool:
+        """Suspende la TUI y ejecuta ``<tool> -v`` en el TTY real.
+
+        Es el hook que se inyecta en los adapters: cuando no hay credenciales
+        cacheadas, ``PackageAdapter.execute_command`` lo invoca para que el
+        usuario escriba su contraseña en la terminal, sin que la TUI la
+        capture ni la almacene. Devuelve True si se obtuvieron credenciales.
+        """
+        tool = self._elevation_tool()
+        if tool is None:
+            self._notify_elevation(
+                'Elevación no disponible',
+                'Instala sudo o doas para realizar esta acción.',
+                severity='warning',
+            )
+            return False
+        try:
+            with self.suspend():
+                result = subprocess.run([tool, '-v'], check=False)
+            ok = result.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            logger.debug('elevación cancelada o fallida', exc_info=True)
+            ok = False
+        except Exception:
+            logger.debug('elevación no disponible en este entorno', exc_info=True)
+            ok = False
+
+        if ok:
+            self._notify_elevation(
+                'Sesión elevada', 'Credenciales obtenidas; reintentando…')
+        else:
+            self._notify_elevation(
+                'Elevación cancelada',
+                f'Ejecuta {tool} -v en la terminal y vuelve a intentarlo.',
+                severity='warning',
+            )
+        return ok
+
+    def _notify_elevation(self, title: str, message: str,
+                          severity: str = 'information') -> None:
+        """Notifica al volver de suspender, tolerando entornos sin pantalla."""
+        try:
+            self.notify(title, message, severity=severity)
+        except Exception:
+            logger.debug('notify no disponible durante la elevación',
+                         exc_info=True)
+
+    def _inject_elevator(self) -> None:
+        """Conecta ``elevate`` con el adapter real del PackageManager."""
+        manager = getattr(self.services, 'package_manager', None)
+        adapter = getattr(manager, 'adapter', None)
+        if adapter is None:
+            return
+        try:
+            adapter.elevator = self.elevate
+        except Exception:
+            logger.debug('no se pudo inyectar el elevador en el adapter',
+                         exc_info=True)
 
     def notify_native(self, title: str, message: str) -> None:
         """Notificación nativa opcional (config `native_notifications`)."""

@@ -20,11 +20,14 @@ import os
 import shutil
 from typing import Callable
 
-from textual import on, work
+from textual import events, on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.css.query import NoMatches
+from textual.message import Message
 from textual.screen import Screen, ModalScreen
 from textual.widgets import (
+    Button,
     DataTable,
     Footer,
     Header,
@@ -36,7 +39,7 @@ from textual.widgets import (
     Select,
     Static,
 )
-from textual.containers import Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 
 from tui_manager.i18n import t
 from tui_manager.ui.app import Services
@@ -127,6 +130,28 @@ def _open_context_help(screen: Screen) -> None:
         HelpScreen(screen.services, context=type(screen).__name__))
 
 
+# ------------------------------------------------- Controles clicables ----
+
+class HelpButton(Button):
+    """Botón «?» compacto: abre la ayuda contextual del screen que lo contiene.
+
+    2.0-A2: la ayuda deja de depender solo de la tecla «?». El botón se
+    reutiliza en el menú y en las pantallas con tabla; delega en ``action_help``
+    del screen contenedor para no duplicar la lógica de contexto.
+    """
+
+    def __init__(self) -> None:
+        super().__init__('?', id='help-btn',
+                         classes='button-compact help-button',
+                         tooltip=t('common.help'))
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        screen = self.screen
+        if screen is not None and hasattr(screen, 'action_help'):
+            screen.action_help()
+
+
 # ---------------------------------------------------------------- Menú ----
 
 class MainMenuScreen(Screen):
@@ -168,7 +193,10 @@ class MainMenuScreen(Screen):
         yield Label(f'[b]{title_icon()} {t("app.title")}[/] — {t("menu.title")}',
                     classes='title')
         yield ListView(id='menu')
-        yield Static(t('menu.keys'), id='menu-status', classes='status', markup=False)
+        with Horizontal(classes='status-bar'):
+            yield Static(t('menu.keys'), id='menu-status', classes='status',
+                         markup=False)
+            yield HelpButton()
         yield Footer()
 
     def on_mount(self) -> None:
@@ -240,6 +268,39 @@ def quickstart_text() -> str:
 
 # ------------------------------------------------------------ Paquetes ----
 
+class MarkableDataTable(DataTable):
+    """DataTable que avisa cuando se clicó la celda de la columna «Marcar».
+
+    2.0-A2: con ``cursor_type='row'`` Textual solo publica ``RowSelected`` (sin
+    información de columna) y además solo al clicar la celda ya resaltada.
+    Interceptamos el ``Click`` original para avisar en el primer clic y saber
+    que fue la columna 0, sin alterar la navegación de la tabla.
+    """
+
+    class MarkToggled(Message):
+        """Clic en la celda de marcado de la fila `row`."""
+
+        def __init__(self, table: 'MarkableDataTable', row: int,
+                     column: int) -> None:
+            self.table = table
+            self.row = row
+            self.column = column
+            super().__init__()
+
+        @property
+        def control(self) -> 'MarkableDataTable':
+            return self.table
+
+    async def _on_click(self, event: events.Click) -> None:
+        meta = event.style.meta
+        row = meta.get('row')
+        column = meta.get('column')
+        if (isinstance(row, int) and row >= 0 and column == 0
+                and self.show_cursor and self.cursor_type != 'none'):
+            self.post_message(self.MarkToggled(self, row, column))
+        await super()._on_click(event)
+
+
 class PackagesScreen(Screen):
     """Gestión de aplicaciones: listar, buscar, instalar, remover, caché."""
 
@@ -270,8 +331,11 @@ class PackagesScreen(Screen):
                     f'({self.services.distribution})', classes='title')
         yield Input(placeholder=t('common.search'), id='search')
         yield LoadingIndicator(id='packages-loading')
-        yield DataTable(id='packages-table')
-        yield Static(t('packages.keys'), id='packages-status', classes='status', markup=False)
+        yield MarkableDataTable(id='packages-table')
+        with Horizontal(classes='status-bar'):
+            yield Static(t('packages.keys'), id='packages-status',
+                         classes='status', markup=False)
+            yield HelpButton()
         yield Footer()
 
     def on_mount(self) -> None:
@@ -360,8 +424,11 @@ class PackagesScreen(Screen):
 
     def action_toggle_mark(self) -> None:
         """Espacio: marca/desmarca la fila actual conservando el cursor."""
-        table = self.query_one('#packages-table', DataTable)
-        index = table.cursor_row
+        self._toggle_mark_at(
+            self.query_one('#packages-table', DataTable).cursor_row)
+
+    def _toggle_mark_at(self, index: int) -> None:
+        """Marca/desmarca `index`; la lógica la comparten Espacio y el clic."""
         if not (0 <= index < len(self._packages)):
             return
         if index in self._marked:
@@ -370,6 +437,11 @@ class PackagesScreen(Screen):
             self._marked.add(index)
         self._fill(self._packages, self._origin, keep_marks=True)
         self.query_one('#packages-table', DataTable).move_cursor(row=index)
+
+    @on(MarkableDataTable.MarkToggled, '#packages-table')
+    def mark_cell_clicked(self, event: MarkableDataTable.MarkToggled) -> None:
+        """2.0-A2: clic en la columna «Marcar» = misma acción que Espacio."""
+        self._toggle_mark_at(event.row)
 
     def _take_pending(self, confirmed) -> list:
         """Devuelve el lote confirmado; cancelar no ejecuta ni deja pendiente."""
@@ -534,8 +606,18 @@ class ProcessesScreen(Screen):
         yield Label(f'[b]{screen_icon("ProcessesScreen")} {t("processes.title")}[/]',
                     classes='title')
         yield Input(placeholder=t('common.filter'), id='proc-filter')
+        # 2.0-A2: orden también con ratón/táctil; 's' sigue ciclando igual.
+        yield Select(
+            [(t(f'processes.sort_{criterion}'), criterion)
+             for criterion in self.SORT_CRITERIA],
+            value=self._sort, id='sort-select', prompt=t('processes.sort'),
+            allow_blank=False, compact=True, classes='select-compact',
+        )
         yield DataTable(id='process-table')
-        yield Static(t('processes.keys'), id='process-status', classes='status', markup=False)
+        with Horizontal(classes='status-bar'):
+            yield Static(t('processes.keys'), id='process-status',
+                         classes='status', markup=False)
+            yield HelpButton()
         yield Footer()
 
     def on_mount(self) -> None:
@@ -605,6 +687,23 @@ class ProcessesScreen(Screen):
         criterion = (self._sort if self._sort in self.SORT_CRITERIA else 'cpu')
         index = self.SORT_CRITERIA.index(criterion)
         self._sort = self.SORT_CRITERIA[(index + 1) % len(self.SORT_CRITERIA)]
+        self._sync_sort_select()
+        self._fill(self._raw_processes)
+
+    def _sync_sort_select(self) -> None:
+        """Mantiene el Select clicable sincronizado con el atajo 's'."""
+        try:
+            self.query_one('#sort-select', Select).value = self._sort
+        except NoMatches:
+            pass  # pantalla sin montar (tests de guardia AST)
+
+    @on(Select.Changed, '#sort-select')
+    def sort_changed(self, event: Select.Changed) -> None:
+        """2.0-A2: elegir un criterio en el Select reordena la tabla."""
+        criterion = str(event.value)
+        if criterion not in self.SORT_CRITERIA or criterion == self._sort:
+            return
+        self._sort = criterion
         self._fill(self._raw_processes)
 
     def pause_polling(self) -> None:
@@ -1121,7 +1220,10 @@ class UpdatesScreen(Screen):
         yield Label(f'[b]{screen_icon("UpdatesScreen")} {t("updates.title")}[/]',
                     classes='title')
         yield DataTable(id='updates-table')
-        yield Static(t('updates.checking'), id='updates-status', classes='status', markup=False)
+        with Horizontal(classes='status-bar'):
+            yield Static(t('updates.checking'), id='updates-status',
+                         classes='status', markup=False)
+            yield HelpButton()
         yield Footer()
 
     def on_mount(self) -> None:
@@ -1577,7 +1679,22 @@ class ConfirmScreen(ModalScreen):
     def compose(self) -> ComposeResult:
         with Vertical(classes='dialog'):
             yield Label(self.message, id='confirm-message')
+            with Horizontal(classes='button-row'):
+                yield Button(t('common.yes'), id='confirm-yes',
+                             variant='primary', classes='button-compact')
+                yield Button(t('common.no'), id='confirm-no',
+                             classes='button-compact')
             yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one('#confirm-yes', Button).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """2.0-A1: los botones Sí/No hacen lo mismo que y/n/Esc."""
+        if event.button.id == 'confirm-yes':
+            self.action_yes()
+        elif event.button.id == 'confirm-no':
+            self.action_no()
 
     def action_yes(self) -> None:
         self.dismiss(True)
@@ -1600,6 +1717,11 @@ class InputScreen(ModalScreen):
         with Vertical(classes='dialog'):
             yield Label(self.prompt)
             yield Input(value=self.value, id='modal-input')
+            with Horizontal(classes='button-row'):
+                yield Button(t('common.confirm'), id='input-accept',
+                             variant='primary', classes='button-compact')
+                yield Button(t('common.cancel'), id='input-cancel',
+                             classes='button-compact')
             yield Footer()
 
     def on_mount(self) -> None:
@@ -1607,6 +1729,14 @@ class InputScreen(ModalScreen):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         self.dismiss(event.value.strip())
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """2.0-A1: Aceptar envía el valor; Cancelar equivale a Esc."""
+        if event.button.id == 'input-accept':
+            self.dismiss(
+                self.query_one('#modal-input', Input).value.strip())
+        elif event.button.id == 'input-cancel':
+            self.action_cancel()
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -1630,6 +1760,9 @@ class SelectScreen(ModalScreen):
             yield Label(self.title)
             yield ListView(id='source-options')
             yield Static('', id='sources-status', classes='status', markup=False)
+            with Horizontal(classes='button-row'):
+                yield Button(t('common.cancel'), id='select-cancel',
+                             classes='button-compact')
             yield Footer()
 
     def on_mount(self) -> None:
@@ -1637,7 +1770,8 @@ class SelectScreen(ModalScreen):
         for i, opt in enumerate(self.options):
             hint = self.hints[i] if i < len(self.hints) else ''
             label = opt if not hint else f'{opt}  [{hint}]'
-            view.append(ListItem(Static(label), id=str(i)))
+            # Textual 8 exige IDs que no empiecen por dígito.
+            view.append(ListItem(Static(label), id=f'option-{i}'))
         if self.options:
             view.index = 0
         self.query_one('#sources-status', Static).update(_status(
@@ -1648,7 +1782,12 @@ class SelectScreen(ModalScreen):
     @on(ListView.Selected)
     def selected(self, event: ListView.Selected) -> None:
         if event.item.id is not None:
-            self.dismiss(int(event.item.id))
+            self.dismiss(int(event.item.id.rsplit('-', 1)[-1]))
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """2.0-A1: el botón Cancelar equivale a Esc."""
+        if event.button.id == 'select-cancel':
+            self.action_cancel()
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -1688,7 +1827,10 @@ class AppsScreen(Screen):
         )
         yield LoadingIndicator(id='apps-loading')
         yield DataTable(id='apps-table')
-        yield Static(t('apps.category'), id='apps-status', classes='status', markup=False)
+        with Horizontal(classes='status-bar'):
+            yield Static(t('apps.category'), id='apps-status',
+                         classes='status', markup=False)
+            yield HelpButton()
         yield Footer()
 
     def on_mount(self) -> None:

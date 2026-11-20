@@ -100,6 +100,37 @@ Select.select-compact {
     max-width: 60%;
 }
 
+/* 2.0-A2: barra de estado con ayuda clicable. El botón «?» comparte fila
+   con el estado y no se estira; el texto sigue legible a la izquierda. */
+.status-bar {
+    height: 3;
+    align: left middle;
+}
+
+.status-bar .status {
+    height: 3;
+    width: 1fr;
+    content-align: left middle;
+}
+
+/* 2.0-A1/A2: botones compactos de modales y ayudas (nunca a todo lo ancho). */
+.button-compact {
+    width: auto;
+    min-width: 12;
+    max-width: 22;
+}
+
+.button-compact.help-button {
+    width: 6;
+    min-width: 6;
+    max-width: 6;
+}
+
+.button-row {
+    height: 3;
+    align: center middle;
+}
+
 VerticalScroll {
     padding: 0 1;
 }

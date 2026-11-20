@@ -1242,3 +1242,196 @@ def test_quickstart_text_needs_no_services():
     assert isinstance(text, str)
     assert len(text.splitlines()) >= 14  # cabecera + 10 entradas + sugerencia
 
+
+# ---------------- 2.0-A1/A2: compatibilidad mouse / táctil ------------------
+
+@pytest.mark.asyncio
+async def test_confirm_buttons_dismiss(tmp_path, monkeypatch):
+    """2.0-A1: clic en Sí/No hace dismiss(True/False); foco inicial en Sí."""
+    from textual.widgets import Button
+    from tui_manager.ui.screens import ConfirmScreen
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        results = []
+        app.push_screen(ConfirmScreen('¿Continuar?'), results.append)
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, ConfirmScreen)
+        yes = screen.query_one('#confirm-yes', Button)
+        no = screen.query_one('#confirm-no', Button)
+        assert 'button-compact' in yes.classes
+        assert 'button-compact' in no.classes
+        assert yes.has_focus  # foco inicial en el botón primario
+
+        await pilot.click('#confirm-yes')
+        await pilot.pause()
+        assert results == [True]
+
+        app.push_screen(ConfirmScreen('¿Continuar?'), results.append)
+        await pilot.pause()
+        assert app.screen.query_one('#confirm-yes', Button).has_focus
+        await pilot.click('#confirm-no')
+        await pilot.pause()
+        assert results == [True, False]
+
+
+@pytest.mark.asyncio
+async def test_input_buttons_dismiss(tmp_path, monkeypatch):
+    """2.0-A1: Aceptar envía el valor; Cancelar hace dismiss(None)."""
+    from textual.widgets import Button, Input
+    from tui_manager.ui.screens import InputScreen
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        results = []
+        app.push_screen(InputScreen('Valor'), results.append)
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, InputScreen)
+        accept = screen.query_one('#input-accept', Button)
+        cancel = screen.query_one('#input-cancel', Button)
+        assert 'button-compact' in accept.classes
+        assert 'button-compact' in cancel.classes
+        # El campo conserva el foco inicial (atajo Enter sigue vigente).
+        field = screen.query_one('#modal-input', Input)
+        assert field.has_focus
+        field.value = '42'
+
+        await pilot.click('#input-accept')
+        await pilot.pause()
+        assert results == ['42']
+
+        app.push_screen(InputScreen('Valor'), results.append)
+        await pilot.pause()
+        await pilot.click('#input-cancel')
+        await pilot.pause()
+        assert results == ['42', None]
+
+
+@pytest.mark.asyncio
+async def test_select_screen_cancel_button(tmp_path, monkeypatch):
+    """2.0-A1: el botón Cancelar cierra el modal sin elegir opción."""
+    from textual.widgets import Button
+    from tui_manager.ui.screens import SelectScreen
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        results = []
+        app.push_screen(SelectScreen('Fuentes', ['Oficial', 'AUR'],
+                                     ['estable', 'comunidad']), results.append)
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, SelectScreen)
+        cancel = screen.query_one('#select-cancel', Button)
+        assert 'button-compact' in cancel.classes
+
+        await pilot.click('#select-cancel')
+        await pilot.pause()
+        assert results == [None]
+
+
+@pytest.mark.asyncio
+async def test_packages_click_mark_cell(tmp_path, monkeypatch):
+    """2.0-A2: clic en «Marcar» marca/desmarca sin romper la fila única."""
+    from textual.widgets import DataTable
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.press('1')
+        await _wait_workers(app, pilot)
+        screen = app.screen
+        table = screen.query_one('#packages-table', DataTable)
+        assert table.row_count == 3
+        assert table.cursor_type == 'row'
+
+        # Columna 0 («Marcar»), fila 1: y = fila + 2 (borde + cabecera).
+        await pilot.click('#packages-table', offset=(2, 3))
+        await pilot.pause()
+        assert screen._marked == {1}
+        assert table.get_cell_at((1, 0)) == '✓'
+
+        await pilot.click('#packages-table', offset=(2, 3))
+        await pilot.pause()
+        assert screen._marked == set()
+        assert table.get_cell_at((1, 0)) == ''
+
+        # Sin marcas, la acción sigue actuando sobre la fila del cursor.
+        assert [p.name for p in screen._selected_packages()] == ['git']
+
+
+@pytest.mark.asyncio
+async def test_processes_sort_select_click(tmp_path, monkeypatch):
+    """2.0-A2: el Select compacto reordena y 's' lo mantiene sincronizado."""
+    from textual.widgets import DataTable, Select
+    from textual.widgets._select import SelectOverlay
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.press('2')
+        await _wait_workers(app, pilot)
+        screen = app.screen
+        select = screen.query_one('#sort-select', Select)
+        assert 'select-compact' in select.classes
+        assert select.value == 'cpu'
+        table = screen.query_one('#process-table', DataTable)
+        order = lambda: [str(table.get_row_at(i)[0])
+                         for i in range(table.row_count)]
+        assert order() == ['4242', '1', '777']
+
+        # Clic en el Select (fila de contenido, y=1) y en «por memoria»
+        # (índice 1 → y=1 dentro del overlay, tras su borde superior).
+        await pilot.click('#sort-select', offset=(10, 1))
+        await pilot.pause()
+        overlay = select.query_one(SelectOverlay)
+        await pilot.click(overlay, offset=(2, 1))
+        await pilot.pause()
+        assert screen._sort == 'mem'
+        assert select.value == 'mem'
+        assert order() == ['777', '4242', '1']
+
+        # El atajo 's' sigue funcionando y actualiza el control clicable.
+        screen.action_sort()
+        await pilot.pause()
+        assert screen._sort == 'user'
+        assert select.value == 'user'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('key,expected_screen,expected_context', [
+    (None, 'MainMenuScreen', 'MainMenuScreen'),
+    ('1', 'PackagesScreen', 'PackagesScreen'),
+    ('2', 'ProcessesScreen', 'ProcessesScreen'),
+])
+async def test_help_button_opens_contextual_help(tmp_path, monkeypatch,
+                                                 key, expected_screen,
+                                                 expected_context):
+    """2.0-A2: botón «?» clicable junto al atajo, en menú y tablas."""
+    from textual.widgets import Button
+    from tui_manager.ui.screens import HelpScreen
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        if key:
+            await pilot.press(key)
+            await _wait_workers(app, pilot)
+        assert type(app.screen).__name__ == expected_screen
+
+        button = app.screen.query_one('#help-btn', Button)
+        assert 'button-compact' in button.classes
+        assert 'help-button' in button.classes
+        assert button.styles.width is not None
+        assert button.styles.width.value == 6  # regla CSS: no se estira
+
+        await pilot.click('#help-btn')
+        await pilot.pause()
+        assert isinstance(app.screen, HelpScreen)
+        assert app.screen.context == expected_context
+

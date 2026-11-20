@@ -37,6 +37,23 @@ from tui_manager.utils.logger import setup_logger
 CLI_VERSION_COMMANDS = ('apt', 'pacman', 'dnf', 'pkg', 'xbps-query')
 
 
+def configure_non_interactive(manager) -> None:
+    """Desactiva el hook de elevación en los adapters de una ruta CLI.
+
+    ``--json`` y ``--doctor`` son no interactivos: nunca deben suspender una
+    TUI ni pedir una contraseña. Con ``elevator=None`` el adapter usa solo
+    ``sudo -n`` (o ``doas -n``) y, si no hay credenciales cacheadas, devuelve
+    un mensaje accionable en lugar de lanzar el hook de la interfaz.
+    """
+    adapter = getattr(manager, 'adapter', None)
+    if adapter is None:
+        return
+    try:
+        adapter.elevator = None
+    except Exception:  # adapter sine atributos (fake): nada que configurar
+        pass
+
+
 def _cli_version(command: str) -> str:
     """Devuelve la versión de una CLI, o «N/D» si no está disponible.
 
@@ -119,6 +136,7 @@ def collect_doctor_data() -> dict:
         try:
             from tui_manager.core.package_manager import PackageManager
             pm = PackageManager(distribution=distro)
+            configure_non_interactive(pm)
             add('doctor.pm', f'{distro} → {type(pm.adapter).__name__}')
         except Exception as exc:
             add('doctor.pm', str(exc), warn=True)
@@ -231,6 +249,9 @@ def main(argv=None) -> int:
         # La ruta JSON NO configura el logger: su StreamHandler(sys.stdout)
         # mezclaría logs con el JSON. cli_json silencia logging de forma
         # temporal y escribe errores en stderr con exit code 1.
+        # Ruta no interactiva: los adapters creados aquí no reciben el hook
+        # `elevator` de la TUI, por lo que solo usan `sudo -n` y degradan con
+        # un mensaje accionable si no hay credenciales cacheadas.
         from tui_manager.cli_json import emit_json
         return emit_json(args.json)
 
