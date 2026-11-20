@@ -1,9 +1,10 @@
 """
 Módulo de detección de distribución / sistema operativo.
 
-Soporta Linux (Debian, Arch, Fedora, Void, etc.), Termux/Android y BSD
-(FreeBSD, NetBSD, OpenBSD, DragonFly). La detección prioriza /etc/os-release
-para obtener el ID real (evita devolver 'debian' en Ubuntu/Mint).
+Soporta Linux (Debian, Arch, Fedora, Void, etc.), Termux/Android, BSD
+(FreeBSD, NetBSD, OpenBSD, DragonFly), macOS (Homebrew) y Windows
+(winget/scoop/choco). La detección prioriza /etc/os-release para obtener el
+ID real (evita devolver 'debian' en Ubuntu/Mint).
 """
 
 import os
@@ -31,6 +32,8 @@ class DistributionDetector:
         'termux',
         'freebsd', 'dragonfly',
         'netbsd', 'openbsd',  # experimentales (pkgsrc)
+        'darwin', 'macos',  # macOS (Homebrew)
+        'windows',         # Windows (winget/scoop/choco)
     ]
 
     # Archivos de release específicos -> ID. Cada distro se comprueba por SU
@@ -55,6 +58,8 @@ class DistributionDetector:
         'opensuse': 'zypper', 'suse': 'zypper', 'alpine': 'apk',
         'termux': 'pkg', 'freebsd': 'pkg', 'dragonfly': 'pkg',
         'netbsd': 'pkgin', 'openbsd': 'pkg_add',
+        'darwin': 'brew', 'macos': 'brew',
+        'windows': 'winget',
     }
 
     @staticmethod
@@ -119,13 +124,18 @@ class DistributionDetector:
         except (FileNotFoundError, OSError) as e:
             logger.debug("lsb_release no disponible: %s", e)
 
-        # 4) Fallback por kernel (BSD sin os-release)
+        # 4) Fallback por kernel (BSD/macOS/Windows sin os-release)
         import platform
         system = platform.system()
         if system == 'DragonFly':
             return 'dragonfly'
         if system in ('FreeBSD', 'NetBSD', 'OpenBSD'):
             return system.lower()
+        # macOS y Windows no tienen /etc/*-release ni lsb_release.
+        if system == 'Darwin':
+            return 'darwin'
+        if system == 'Windows':
+            return 'windows'
 
         logger.error("No se pudo detectar la distribución")
         raise DistributionError("No se pudo detectar el sistema operativo")

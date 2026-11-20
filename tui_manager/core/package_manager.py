@@ -13,6 +13,8 @@ from .void_adapter import VoidAdapter
 from .termux_adapter import TermuxAdapter
 from .freebsd_adapter import FreeBSDAdapter
 from .pkgsrc_adapter import PkgsrcAdapter
+from .macos_adapter import MacOSAdapter
+from .windows_adapter import WindowsAdapter
 from .perf import PackageCache, paginate
 
 logger = logging.getLogger(__name__)
@@ -72,6 +74,9 @@ class PackageManager:
             'dragonfly': FreeBSDAdapter,
             'netbsd': PkgsrcAdapter,
             'openbsd': PkgsrcAdapter,
+            'darwin': MacOSAdapter,
+            'macos': MacOSAdapter,
+            'windows': WindowsAdapter,
         }
 
         adapter_class = adapters.get(self.distribution.lower())
