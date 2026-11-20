@@ -645,6 +645,9 @@ def test_sysinfo_device_type(monkeypatch, tmp_path):
 def test_sysinfo_gpu_sources(monkeypatch):
     import tui_manager.core.sysinfo as si
     _not_termux(monkeypatch)
+    # Fijar Linux: en FreeBSD real platform.system() ya es FreeBSD y este
+    # bloque prueba la rama lspci, no la de sysctl.
+    monkeypatch.setattr(si.platform, 'system', lambda: 'Linux')
 
     lspci = _ScriptedRunner({('lspci',): (0,
         '00:02.0 VGA compatible controller: Intel Corporation UHD Graphics 620\n'
