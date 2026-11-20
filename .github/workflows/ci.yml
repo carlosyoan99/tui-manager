@@ -67,13 +67,14 @@ jobs:
           release: ${{ matrix.release }}
           usesh: true
           prepare: |
-            pkg install -y python311 py311-pip
+            # Sin paquetes con número de versión (py311-pip no existe en 14.2).
+            pkg install -y python3
           run: |
-            python3.11 -m venv .venv
+            python3 -m ensurepip --upgrade || true
+            python3 -m venv .venv
             . .venv/bin/activate
             python -m pip install --upgrade pip
             python -m pip install textual pyyaml python-json-logger pytest pytest-asyncio pytest-cov
             python -m pip install -e .
-            # 1.2-D: comprobación de sintaxis además de la suite de tests.
             python -m compileall -q tui_manager
             python -m pytest -q
