@@ -36,7 +36,7 @@ def read_readme():
 
 setup(
     name='tui-manager',
-    version='2.0.0',
+    version='2.0.1',
     description='Panel de control portable en terminal: paquetes, procesos, sistema y temas (Linux, BSD, macOS, Windows, Termux)',
     author='Carlos Yoan',
     author_email='carlosyoan99@users.noreply.github.com',

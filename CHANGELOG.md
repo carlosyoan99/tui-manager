@@ -4,6 +4,23 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ---
 
+## [2.0.1] — 2026-11-21 — mejoras de Temas, snapshots y preparación PyPI
+
+### Agregado
+- Wallpaper aleatorio (`R`) e instalación de packs desde carpeta/archivo YAML local (`L`).
+- `SnapshotsScreen` en Ajustes: crear/restaurar snapshots con errores accionables.
+- Bloque «Proyecto» en Ayuda con licencia MIT, GitHub y contacto por Issues.
+- `LICENSE`, `MANIFEST.in` y metadata PyPI corregida (sin correos personales).
+
+### Corregido
+- Sin correos personales en el repo: canal único GitHub Issues/Security Advisory.
+- `setup.py` funciona al construir sdist (`requirements.txt` incluido en el MANIFEST).
+
+### Validación
+- **484 tests verdes** en los 4 hosts · `twine check` PASSED.
+
+---
+
 ## [2.0.0] — 2026-11-21 — multiplataforma completa (macOS/Windows) y experiencia táctil (estable)
 
 ### Agregado
