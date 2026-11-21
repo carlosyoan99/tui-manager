@@ -715,3 +715,113 @@ def test_sysinfo_package_manager_from_detector(monkeypatch):
                         staticmethod(lambda: 'pacman'))
     assert si.collect(runner=_no_subprocess)['package_manager'] == 'pacman'
     assert si.collect(runner=_no_subprocess, pm_name='xbps')['package_manager'] == 'xbps'
+
+
+# ------------- macOS / Windows: ramas simuladas (sin subprocess real) -------
+
+def test_sysinfo_macos_branches(monkeypatch):
+    """macOS: hw.memsize, SPHardwareDataType, sw_vers y kern.boottime."""
+    import tui_manager.core.sysinfo as si
+    _not_termux(monkeypatch)
+    monkeypatch.setattr(si.platform, 'system', lambda: 'Darwin')
+    runner = _ScriptedRunner({
+        ('sysctl', '-n', 'hw.memsize'): (0, '17179869184\n', ''),
+        ('sysctl', '-n', 'machdep.cpu.brand_string'): (0, 'Apple M1 Pro\n', ''),
+        ('sysctl', '-n', 'kern.boottime'): (
+            0, '{ sec = 1700000000, usec = 0 } Mon Nov 14 22:13:20 2023\n', ''),
+        ('sw_vers', '-productVersion'): (0, '14.5\n', ''),
+        ('system_profiler', 'SPHardwareDataType'): (0,
+            'Hardware:\n'
+            '    Model Name: MacBook Pro\n'
+            '    Model Identifier: MacBookPro18,3\n'
+            '    Chip: Apple M1 Pro\n', ''),
+    })
+    info = si.collect(runner=runner, pm_name='brew')
+    assert info['ram'] == '16384 MB'
+    assert info['cpu_model'] == 'Apple M1 Pro'
+    assert info['os_version'] == '14.5'
+    assert info['device_type'] == 'laptop'
+    assert info['model'] == 'MacBook Pro'
+    assert info['gpu'] == 'Apple M1 Pro'
+    assert 'min' in info['uptime']
+    for cmd in (('sysctl', '-n', 'hw.memsize'),
+                ('sw_vers', '-productVersion'),
+                ('system_profiler', 'SPHardwareDataType')):
+        assert cmd in runner.calls
+
+
+def test_sysinfo_macos_desktop_and_honest_fallback(monkeypatch):
+    """iMac → desktop; sin datos simulados los campos degradan a ''."""
+    import tui_manager.core.sysinfo as si
+    _not_termux(monkeypatch)
+    monkeypatch.setattr(si.platform, 'system', lambda: 'Darwin')
+    runner = _ScriptedRunner({
+        ('system_profiler', 'SPHardwareDataType'): (0,
+            'Hardware:\n'
+            '    Model Name: iMac\n'
+            '    Model Identifier: iMac21,1\n'
+            '    Processor Name: Intel Core i7\n', ''),
+    })
+    info = si.collect(runner=runner, pm_name='brew')
+    assert info['device_type'] == 'desktop'
+    assert info['model'] == 'iMac'
+    assert info['gpu'] == 'Intel Core i7'
+    assert info['os_version'] == ''
+    info = si.collect(runner=_no_subprocess, pm_name='brew')
+    for key in ('ram', 'uptime', 'cpu_model', 'os_version',
+                'device_type', 'gpu', 'model'):
+        assert info[key] == ''
+
+
+def test_sysinfo_windows_branches(monkeypatch):
+    """Windows: wmic para RAM/CPU/SO/modelo/GPU y systeminfo para uptime."""
+    import tui_manager.core.sysinfo as si
+    _not_termux(monkeypatch)
+    monkeypatch.setattr(si.platform, 'system', lambda: 'Windows')
+    runner = _ScriptedRunner({
+        ('wmic', 'computersystem', 'get', 'TotalPhysicalMemory'): (
+            0, 'TotalPhysicalMemory\r\n17179869184\r\n', ''),
+        ('wmic', 'cpu', 'get', 'Name'): (
+            0, 'Name\r\nIntel(R) Core(TM) i7-9750H CPU @ 2.60GHz\r\n', ''),
+        ('wmic', 'os', 'get', 'Version'): (
+            0, 'Version\r\n10.0.19045\r\n', ''),
+        ('wmic', 'systemmodel', 'get', 'SystemType'): (
+            0, 'SystemType\r\nPortable\r\n', ''),
+        ('wmic', 'csproduct', 'get', 'Name'): (
+            0, 'Name\r\nLatitude 7420\r\n', ''),
+        ('wmic', 'path', 'win32_videocontroller', 'get', 'name'): (
+            0, 'Name\r\nNVIDIA GeForce RTX 3060\r\n', ''),
+        ('systeminfo',): (0,
+            'Host Name: workstation\n'
+            'System Up Time: 2 Days, 3 Hours, 4 Minutes, 5 Seconds\n', ''),
+    })
+    info = si.collect(runner=runner, pm_name='winget')
+    assert info['ram'] == '16384 MB'
+    assert 'i7-9750H' in info['cpu_model']
+    assert info['os_version'] == '10.0.19045'
+    assert info['device_type'] == 'laptop'
+    assert info['model'] == 'Latitude 7420'
+    assert 'GeForce RTX 3060' in info['gpu']
+    assert info['uptime'] == '2 d 3 h 4 min'
+    assert ('systeminfo',) in runner.calls
+
+
+def test_sysinfo_windows_desktop_and_powershell_fallback(monkeypatch):
+    """Desktop por wmic; GPU desde el fallback de powershell."""
+    import tui_manager.core.sysinfo as si
+    _not_termux(monkeypatch)
+    monkeypatch.setattr(si.platform, 'system', lambda: 'Windows')
+    runner = _ScriptedRunner({
+        ('wmic', 'systemmodel', 'get', 'SystemType'): (
+            0, 'SystemType\r\nDesktop\r\n', ''),
+        ('powershell', '-NoProfile', '-Command',
+         '(Get-CimInstance Win32_VideoController).Name'): (
+            0, 'Intel(R) UHD Graphics 770\n', ''),
+    })
+    info = si.collect(runner=runner, pm_name='winget')
+    assert info['device_type'] == 'desktop'
+    assert info['gpu'] == 'Intel(R) UHD Graphics 770'
+    info = si.collect(runner=_no_subprocess, pm_name='winget')
+    for key in ('ram', 'uptime', 'cpu_model', 'os_version',
+                'device_type', 'gpu', 'model'):
+        assert info[key] == ''

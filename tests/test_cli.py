@@ -44,14 +44,19 @@ def test_cli_invalid_lang_exits_with_error(capsys):
 # ------------------------------------------- B2-2: --doctor ampliado --------
 
 def test_doctor_reports_cli_versions(monkeypatch):
-    """Informa de las 5 CLIs y solo invoca `<cli> --version` (nunca acciones)."""
+    """Informa de todas las CLIs y solo invoca `<cli> --version` si existen."""
     versions = {
         'apt': 'apt 2.6.1',
         'pacman': 'Pacman v6.0.1',
         'dnf': '4.14.0',
         'pkg': 'pkg 1.20.9',
         'xbps-query': 'xbps-query 0.59.1',
+        'brew': 'Homebrew 4.2.1',
+        'winget': 'v1.7.10582',
+        'scoop': 'Current Version: 0.5.1',
+        'choco': 'Chocolatey v2.2.2',
     }
+    assert set(versions) == set(CLI_VERSION_COMMANDS)
     calls = []
 
     def fake_run(cmd, **kwargs):
@@ -62,7 +67,11 @@ def test_doctor_reports_cli_versions(monkeypatch):
         return subprocess.CompletedProcess(
             cmd, 0, stdout=versions[cmd[0]], stderr='')
 
+    def fake_which(command, *args, **kwargs):
+        return f'/usr/bin/{command}'
+
     monkeypatch.setattr(main_module.subprocess, 'run', fake_run)
+    monkeypatch.setattr(main_module.shutil, 'which', fake_which)
     report = run_doctor()
 
     assert sorted(calls) == sorted(
@@ -72,9 +81,44 @@ def test_doctor_reports_cli_versions(monkeypatch):
         assert version in report
 
 
+def test_doctor_cli_commands_include_macos_and_windows():
+    """macOS (brew) y Windows (winget/scoop/choco) están en el doctor."""
+    for cli in ('brew', 'winget', 'scoop', 'choco'):
+        assert cli in CLI_VERSION_COMMANDS
+
+
+def test_doctor_skips_absent_clis_without_running_them(monkeypatch):
+    """Un comando no instalado se reporta N/D sin llegar a ejecutarse."""
+    present = ('apt', 'pacman', 'dnf', 'pkg', 'xbps-query')
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(tuple(cmd))
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout=f'{cmd[0]} 1.0', stderr='')
+
+    def fake_which(command, *args, **kwargs):
+        return f'/usr/bin/{command}' if command in present else None
+
+    monkeypatch.setattr(main_module.subprocess, 'run', fake_run)
+    monkeypatch.setattr(main_module.shutil, 'which', fake_which)
+    report = run_doctor()
+
+    assert sorted(calls) == sorted((cli, '--version') for cli in present)
+    for cli in CLI_VERSION_COMMANDS:
+        if cli not in present:
+            assert any(line.strip().startswith(cli) and 'N/D' in line
+                       for line in report.splitlines()), cli
+
+
 @pytest.mark.parametrize('cli', CLI_VERSION_COMMANDS)
 def test_cli_version_graceful_fallback(monkeypatch, cli):
     """Ausente, error o salida vacía → «N/D», sin lanzar excepción."""
+    # Fingimos que la CLI existe para ejercitar también las 3 rutas de error
+    # del subprocess (shutil.which se comprueba en test_doctor_skips_absent).
+    monkeypatch.setattr(main_module.shutil, 'which',
+                        lambda name, *a, **k: f'/usr/bin/{name}')
+
     def missing(cmd, **kwargs):
         raise FileNotFoundError(cmd[0])
 
@@ -100,6 +144,8 @@ def test_cli_version_uses_first_line_of_stderr(monkeypatch):
         return subprocess.CompletedProcess(
             cmd, 0, stdout='', stderr='apt 2.7.14\notros detalles')
 
+    monkeypatch.setattr(main_module.shutil, 'which',
+                        lambda name, *a, **k: '/usr/bin/apt')
     monkeypatch.setattr(main_module.subprocess, 'run', fake_run)
     assert _cli_version('apt') == 'apt 2.7.14'
 
@@ -112,6 +158,8 @@ def test_cli_version_skips_ascii_art(monkeypatch):
             stdout='.--.\nPacman v7.1.0 - libalpm v16.0.1\nCopyright (C)',
             stderr='')
 
+    monkeypatch.setattr(main_module.shutil, 'which',
+                        lambda name, *a, **k: '/usr/bin/pacman')
     monkeypatch.setattr(main_module.subprocess, 'run', fake_run)
     assert _cli_version('pacman') == 'Pacman v7.1.0 - libalpm v16.0.1'
 

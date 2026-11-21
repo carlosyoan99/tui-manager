@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import shutil
 import sys
 import time
@@ -41,6 +42,65 @@ def _effective_runner(runner):
     return _noop_runner if 'pytest' in sys.modules else _run
 
 
+_WMIC_HEADERS = {'name', 'caption', 'version', 'systemtype',
+                 'totalphysicalmemory', 'model', 'manufacturer', 'description'}
+
+
+def _wmic_values(out: str) -> list:
+    """Valores de una salida wmic: descarta la cabecera y las líneas '--'."""
+    values = []
+    for line in (out or '').splitlines():
+        value = line.strip()
+        if not value or set(value) == {'-'}:
+            continue
+        values.append(value)
+    if len(values) > 1:
+        first = values[0]
+        # wmic siempre escribe la propiedad como cabecera; powershell no.
+        looks_like_header = (first.lower() in _WMIC_HEADERS
+                             or (not any(c.isdigit() for c in first)
+                                 and any(c.isdigit() for c in values[1])))
+        if looks_like_header:
+            values = values[1:]
+    return values
+
+
+def _wmic_value(out: str) -> str:
+    """Primer valor útil de una salida wmic ('' si no hay dato)."""
+    values = _wmic_values(out)
+    return values[0] if values else ''
+
+
+def _first_int(out: str):
+    """Primer entero de una salida de comando (RAM en bytes, etc.)."""
+    for token in (out or '').replace(',', '').split():
+        if token.isdigit():
+            return int(token)
+    return None
+
+
+def _format_uptime(seconds) -> str:
+    """Segundos → 'N d H h M min' (los ceros se omiten salvo los minutos)."""
+    days, seconds = divmod(int(seconds), 86400)
+    hours, seconds = divmod(seconds, 3600)
+    minutes = seconds // 60
+    parts = []
+    if days:
+        parts.append(f'{days} d')
+    if hours:
+        parts.append(f'{hours} h')
+    parts.append(f'{minutes} min')
+    return ' '.join(parts)
+
+
+def _boottime_seconds(out: str):
+    """Extrae `sec` de `sysctl -n kern.boottime` (macOS/BSD)."""
+    match = re.search(r'sec\s*=\s*(\d+)', out or '')
+    if not match:
+        return None
+    return max(0, int(time.time()) - int(match.group(1)))
+
+
 def _meminfo() -> dict:
     """Lee /proc/meminfo y devuelve MB (Linux)."""
     values = {}
@@ -57,7 +117,29 @@ def _meminfo() -> dict:
     return values
 
 
-def _ram_total_mb() -> str:
+def _ram_total_mb(runner=None, system=None) -> str:
+    """RAM total en MB: /proc (Linux), sysctl (macOS/BSD), wmic (Windows)."""
+    runner = runner if runner is not None else _run
+    system = system or platform.system()
+    if system == 'Darwin':
+        code, out, _ = runner(['sysctl', '-n', 'hw.memsize'], timeout=5)
+        if code == 0 and out.strip().isdigit():
+            return f'{int(out.strip()) // (1024 * 1024)} MB'
+        return ''
+    if system == 'Windows':
+        for cmd in (
+            ['wmic', 'computersystem', 'get', 'TotalPhysicalMemory'],
+            ['powershell', '-NoProfile', '-Command',
+             '(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory'],
+        ):
+            try:
+                code, out, _ = runner(cmd, timeout=5)
+            except Exception:
+                continue
+            value = _first_int(out) if code == 0 else None
+            if value:
+                return f'{value // (1024 * 1024)} MB'
+        return ''
     try:  # Linux
         kb = None
         with open('/proc/meminfo') as f:
@@ -69,8 +151,8 @@ def _ram_total_mb() -> str:
             return f'{kb // 1024} MB'
     except (OSError, ValueError, IndexError):
         pass
-    try:  # FreeBSD/NetBSD
-        code, out, _ = _run(['sysctl', '-n', 'hw.physmem'])
+    try:  # FreeBSD/NetBSD (también por runner inyectable)
+        code, out, _ = runner(['sysctl', '-n', 'hw.physmem'], timeout=5)
         if code == 0 and out.strip().isdigit():
             return f'{int(out.strip()) // (1024 * 1024)} MB'
     except Exception:
@@ -78,8 +160,29 @@ def _ram_total_mb() -> str:
     return ''
 
 
-def _cpu_model() -> str:
-    """Modelo de CPU desde /proc/cpuinfo, sysctl o lscpu."""
+def _cpu_model(runner=None, system=None) -> str:
+    """Modelo de CPU: /proc, sysctl, lscpu, wmic o system_profiler."""
+    runner = runner if runner is not None else _run
+    system = system or platform.system()
+    if system == 'Darwin':
+        for cmd in (['sysctl', '-n', 'machdep.cpu.brand_string'],
+                    ['sysctl', '-n', 'hw.model']):
+            code, out, _ = runner(cmd, timeout=5)
+            if code == 0 and out.strip():
+                return out.strip()
+        return ''
+    if system == 'Windows':
+        for cmd in (
+            ['wmic', 'cpu', 'get', 'Name'],
+            ['powershell', '-NoProfile', '-Command',
+             '(Get-CimInstance Win32_Processor).Name'],
+        ):
+            code, out, _ = runner(cmd, timeout=5)
+            if code == 0:
+                value = _wmic_value(out)
+                if value:
+                    return value
+        return ''
     try:
         with open('/proc/cpuinfo') as f:
             for line in f:
@@ -88,7 +191,7 @@ def _cpu_model() -> str:
     except OSError:
         pass
     for cmd in (['sysctl', '-n', 'hw.model'], ['lscpu']):
-        code, out, _ = _run(cmd)
+        code, out, _ = runner(cmd, timeout=5)
         if code == 0 and out.strip():
             if cmd[0] == 'lscpu':
                 for line in out.splitlines():
@@ -99,26 +202,40 @@ def _cpu_model() -> str:
     return ''
 
 
-def _uptime() -> str:
-    """Tiempo de actividad en formato legible."""
+def _uptime(runner=None, system=None) -> str:
+    """Tiempo de actividad: /proc, kern.boottime (macOS/BSD) o systeminfo."""
+    runner = runner if runner is not None else _run
+    system = system or platform.system()
+    if system == 'Darwin':
+        code, out, _ = runner(['sysctl', '-n', 'kern.boottime'], timeout=5)
+        seconds = _boottime_seconds(out) if code == 0 else None
+        return _format_uptime(seconds) if seconds is not None else ''
+    if system == 'Windows':
+        code, out, _ = runner(['systeminfo'], timeout=5)
+        if code == 0 and out:
+            # "System Up Time: 2 Days, 3 Hours, 4 Minutes, 5 Seconds"
+            # (también se aceptan las etiquetas localizadas en español).
+            match = re.search(
+                r'(\d+)\s*(?:Days?|días?)[^,]*,\s*'
+                r'(\d+)\s*(?:Hours?|horas?)[^,]*,\s*'
+                r'(\d+)\s*(?:Minutes?|minutos?)',
+                out, re.IGNORECASE)
+            if match:
+                return _format_uptime(
+                    int(match.group(1)) * 86400
+                    + int(match.group(2)) * 3600
+                    + int(match.group(3)) * 60)
+        return ''
     try:
         with open('/proc/uptime') as f:
             seconds = int(float(f.read().split()[0]))
     except (OSError, ValueError, IndexError):
-        code, out, _ = _run(['sysctl', '-n', 'kern.boottime'])
+        code, out, _ = runner(['sysctl', '-n', 'kern.boottime'], timeout=5)
         if code == 0 and out.strip():
-            return out.strip()
+            parsed = _boottime_seconds(out)
+            return _format_uptime(parsed) if parsed is not None else out.strip()
         return ''
-    days, seconds = divmod(seconds, 86400)
-    hours, seconds = divmod(seconds, 3600)
-    minutes = seconds // 60
-    parts = []
-    if days:
-        parts.append(f'{days} d')
-    if hours:
-        parts.append(f'{hours} h')
-    parts.append(f'{minutes} min')
-    return ' '.join(parts)
+    return _format_uptime(seconds)
 
 
 def _disk_root() -> str:
@@ -177,12 +294,30 @@ def _parse_os_release(text: str) -> dict:
     return values
 
 
-def _os_version(os_release_text=None) -> str:
-    """VERSION_ID o VERSION de os-release; PRETTY_NAME si no hay versión."""
-    text = os_release_text
-    if text is None:
-        text = _read_text(OS_RELEASE_PATH)
-    values = _parse_os_release(text)
+def _os_version(os_release_text=None, runner=None, system=None) -> str:
+    """Versión del SO: os-release (Linux), sw_vers (macOS), wmic (Windows)."""
+    if os_release_text is not None:
+        values = _parse_os_release(os_release_text)
+        return (values.get('VERSION_ID') or values.get('VERSION')
+                or values.get('PRETTY_NAME', '') or '')
+    runner = _effective_runner(runner)
+    system = system or platform.system()
+    if system == 'Darwin':
+        code, out, _ = runner(['sw_vers', '-productVersion'], timeout=5)
+        return out.strip() if code == 0 else ''
+    if system == 'Windows':
+        for cmd in (
+            ['wmic', 'os', 'get', 'Version'],
+            ['powershell', '-NoProfile', '-Command',
+             '(Get-CimInstance Win32_OperatingSystem).Version'],
+        ):
+            code, out, _ = runner(cmd, timeout=5)
+            if code == 0:
+                value = _wmic_value(out)
+                if value:
+                    return value
+        return ''
+    values = _parse_os_release(_read_text(OS_RELEASE_PATH))
     return (values.get('VERSION_ID') or values.get('VERSION')
             or values.get('PRETTY_NAME', '') or '')
 
@@ -210,10 +345,43 @@ _DESKTOP_CHASSIS = {'3', '4', '5', '6', '7', '13', '16', '17', '18', '19',
                     '20', '21', '22', '23', '24', '25', '26', '27'}
 
 
-def _device_type(runner, termux=False) -> str:
-    """Termux / VM / laptop / desktop; '' si no hay dato fiable."""
+def _device_type(runner, termux=False, system='') -> str:
+    """Termux / VM / laptop / desktop; '' si no hay dato fiable.
+
+    Linux usa DMI (chassis_type), macOS ``system_profiler SPHardwareDataType``
+    y Windows ``wmic``; las tres rutas pasan por el runner inyectable.
+    """
     if termux:
         return 'Termux'
+    system = system or platform.system()
+    if system == 'Darwin':
+        code, out, _ = runner(['system_profiler', 'SPHardwareDataType'],
+                              timeout=5)
+        if code == 0 and out:
+            text = out.lower()
+            if 'macbook' in text:
+                return 'laptop'
+            if any(key in text for key in ('imac', 'macmini', 'mac mini',
+                                           'macpro', 'mac pro', 'mac studio')):
+                return 'desktop'
+        return ''
+    if system == 'Windows':
+        for cmd in (['wmic', 'systemmodel', 'get', 'SystemType'],
+                    ['wmic', 'csproduct', 'get', 'Name']):
+            code, out, _ = runner(cmd, timeout=5)
+            if code != 0 or not out:
+                continue
+            text = out.lower()
+            if any(key in text for key in (
+                    'portable', 'laptop', 'notebook', 'latitude', 'thinkpad',
+                    'elitebook', 'ideapad', 'pavilion', 'xps', 'surface',
+                    'macbook')):
+                return 'laptop'
+            if any(key in text for key in (
+                    'desktop', 'tower', 'optiplex', 'workstation', 'server',
+                    'imac')):
+                return 'desktop'
+        return ''
     code, out, _ = runner(['systemd-detect-virt'], timeout=5)
     if code == 0 and out.strip() and out.strip().lower() != 'none':
         return 'VM'
@@ -226,10 +394,42 @@ def _device_type(runner, termux=False) -> str:
 
 
 def _detect_gpu(runner, termux=False, system='') -> str:
-    """GPU: getprop en Termux, sysctl en BSD, lspci (VGA/3D) en Linux."""
+    """GPU: getprop (Termux), sysctl (BSD), lspci (Linux), SPHardware/wmic."""
     if termux:
         code, out, _ = runner(['getprop', 'ro.gpu'], timeout=5)
         return out.strip() if code == 0 and out.strip() else ''
+    if system == 'Darwin':
+        code, out, _ = runner(['system_profiler', 'SPHardwareDataType'],
+                              timeout=5)
+        if code == 0 and out:
+            for line in out.splitlines():
+                low = line.strip().lower()
+                if low.startswith(('chip:', 'processor name:', 'processor:')):
+                    value = line.strip().split(':', 1)[1].strip()
+                    if value:
+                        return value
+        code, out, _ = runner(['system_profiler', 'SPDisplaysDataType'],
+                              timeout=5)
+        if code == 0 and out:
+            for line in out.splitlines():
+                low = line.strip().lower()
+                if low.startswith(('chipset model:', 'vendor:')):
+                    value = line.strip().split(':', 1)[1].strip()
+                    if value:
+                        return value
+        return ''
+    if system == 'Windows':
+        for cmd in (
+            ['wmic', 'path', 'win32_videocontroller', 'get', 'name'],
+            ['powershell', '-NoProfile', '-Command',
+             '(Get-CimInstance Win32_VideoController).Name'],
+        ):
+            code, out, _ = runner(cmd, timeout=5)
+            if code == 0:
+                value = _wmic_value(out)
+                if value:
+                    return value
+        return ''
     if system in ('FreeBSD', 'NetBSD', 'OpenBSD', 'DragonFly'):
         code, out, _ = runner(['sysctl', '-n', 'hw.model'], timeout=5)
         return out.strip() if code == 0 and out.strip() else ''
@@ -245,6 +445,35 @@ def _detect_gpu(runner, termux=False, system='') -> str:
                 desc = desc.strip()
                 if desc:
                     return desc
+    return ''
+
+
+def _model(runner, system='') -> str:
+    """Modelo del equipo: SPHardwareDataType (macOS) / wmic (Windows)."""
+    system = system or platform.system()
+    if system == 'Darwin':
+        code, out, _ = runner(['system_profiler', 'SPHardwareDataType'],
+                              timeout=5)
+        if code == 0 and out:
+            for key in ('model name:', 'model identifier:'):
+                for line in out.splitlines():
+                    if line.strip().lower().startswith(key):
+                        value = line.strip().split(':', 1)[1].strip()
+                        if value:
+                            return value
+        return ''
+    if system == 'Windows':
+        for cmd in (
+            ['wmic', 'csproduct', 'get', 'Name'],
+            ['powershell', '-NoProfile', '-Command',
+             '(Get-CimInstance Win32_ComputerSystem).Model'],
+        ):
+            code, out, _ = runner(cmd, timeout=5)
+            if code == 0:
+                value = _wmic_value(out)
+                if value:
+                    return value
+        return ''
     return ''
 
 
@@ -381,7 +610,7 @@ def collect(distribution: str = '', environment=None,
         'distro': distribution or '—',
         'environment': getattr(environment, 'name', '—') or '—',
         'cpu': (str(cores or '?') + ' núcleos'),
-        'ram': _ram_total_mb(),
+        'ram': _ram_total_mb(runner, system),
         'disk': f'{disk["total"]} ({disk["percent"]}% usado)' if disk else '',
         'battery': None,
         'packages': None,
@@ -396,10 +625,10 @@ def collect(distribution: str = '', environment=None,
         'python_impl': platform.python_implementation(),
         'shell': os.environ.get('SHELL', ''),
         'term': os.environ.get('TERM', ''),
-        'uptime': _uptime(),
+        'uptime': _uptime(runner, system),
 
         # --- nuevos: hardware ---
-        'cpu_model': _cpu_model(),
+        'cpu_model': _cpu_model(runner, system),
         'cpu_logical': cores,
         'cpu_physical': _physical_cores(cores),
         'ram_total': f'{ram_total} MB' if ram_total else '',
@@ -412,9 +641,10 @@ def collect(distribution: str = '', environment=None,
         'disk_percent': disk.get('percent', 0),
 
         # --- nuevos: estilo fastfetch (datos ausentes → '' / []) ---
-        'os_version': _os_version(os_release_text),
+        'os_version': _os_version(os_release_text, runner, system),
         'device_name': _device_name(runner, termux),
-        'device_type': _device_type(runner, termux),
+        'device_type': _device_type(runner, termux, system),
+        'model': _model(runner, system),
         'gpu': _detect_gpu(runner, termux, system),
         'package_manager': pm_name or '',
         'displays': _displays(runner),

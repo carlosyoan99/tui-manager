@@ -34,7 +34,13 @@ from tui_manager.utils.logger import setup_logger
 
 
 # Gestores consultados por --doctor: SOLO se invoca `<cli> --version`.
-CLI_VERSION_COMMANDS = ('apt', 'pacman', 'dnf', 'pkg', 'xbps-query')
+# Incluye los gestores de macOS (brew) y Windows (winget/scoop/choco).
+# Los comandos no instalados se degradan a «N/D» SIN llegar a ejecutarse
+# (véase _cli_version: comprueba `shutil.which` antes de lanzar subprocess).
+CLI_VERSION_COMMANDS = (
+    'apt', 'pacman', 'dnf', 'pkg', 'xbps-query',
+    'brew', 'winget', 'scoop', 'choco',
+)
 
 
 def configure_non_interactive(manager) -> None:
@@ -60,7 +66,13 @@ def _cli_version(command: str) -> str:
     Seguridad (B2-2): el único subproceso permitido es `<command> --version`,
     con salida capturada y timeout. Nunca se ejecuta una acción que pueda
     modificar el sistema, y cualquier error se degrada a «N/D».
+
+    Los comandos ausentes (`shutil.which` devuelve None) ni se invocan: así
+    el doctor es portable (brew en macOS, winget/scoop/choco en Windows) y
+    no genera ruido de subprocess en plataformas donde no existen.
     """
+    if shutil.which(command) is None:
+        return 'N/D'
     try:
         result = subprocess.run(
             [command, '--version'],

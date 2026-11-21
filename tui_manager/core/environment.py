@@ -9,6 +9,7 @@ Spec: docs/TECHNICAL_SPECS.md §10.2. Reglas:
 """
 
 import os
+import platform
 import shutil
 import subprocess
 import logging
@@ -446,6 +447,168 @@ class TermuxEnvironmentAdapter(EnvironmentAdapter):
         return _run(['setsid', '-f', command])[0] == 0
 
 
+class MacOSEnvironmentAdapter(EnvironmentAdapter):
+    """macOS: AppleScript / defaults / open. Sin WM ni variables XDG.
+
+    Las capacidades dependen de las herramientas presentes; nunca se asume
+    que una acción existe. Todas las llamadas pasan por _run() (simulable).
+    """
+
+    name = 'macos'
+
+    def capabilities(self) -> set:
+        caps = set()
+        if _has('open'):
+            caps.add(Capability.LAUNCH_APP)
+        if _has('osascript'):
+            caps.add(Capability.LIST_WINDOWS)
+        if _has('osascript', 'sqlite3'):
+            caps.add(Capability.SET_WALLPAPER)
+        if _has('defaults'):
+            caps.add(Capability.SET_DARK_MODE)
+        if _has('pmset'):
+            caps.add(Capability.LOCK_SCREEN)
+        return caps
+
+    def set_wallpaper(self, path: str) -> bool:
+        tool = _has('osascript', 'sqlite3')
+        if tool == 'osascript':
+            script = (f'tell application "System Events" to set picture '
+                      f'of every desktop to "{path}"')
+            code, _, err = _run(['osascript', '-e', script])
+        elif tool == 'sqlite3':
+            db = os.path.expanduser(
+                '~/Library/Application Support/Dock/desktoppicture.db')
+            code, _, err = _run(['sqlite3', db,
+                                 f"UPDATE data SET value='{path}';"])
+            if code == 0:
+                _run(['killall', 'Dock'])  # recarga el Dock para aplicar
+        else:
+            return False
+        if code != 0:
+            logger.error(f"wallpaper ({tool}): {err}")
+        return code == 0
+
+    def set_dark_mode(self, dark: bool) -> bool:
+        """AppleInterfaceStyle = Dark, o borrar la clave para modo claro."""
+        cmd = (['defaults', 'write', '-g', 'AppleInterfaceStyle',
+                '-string', 'Dark'] if dark
+               else ['defaults', 'delete', '-g', 'AppleInterfaceStyle'])
+        code, _, err = _run(cmd)
+        if code != 0:
+            logger.error(f"defaults dark mode: {err}")
+        return code == 0
+
+    def launch_app(self, command: str) -> bool:
+        app = command.strip().split()[0].strip('"\'') if command.strip() else ''
+        if not app:
+            return False
+        return _run(['open', '-a', app])[0] == 0
+
+    def list_windows(self) -> List[dict]:
+        script = ('tell application "System Events" to get name '
+                  'of every process whose visible is true')
+        code, out, err = _run(['osascript', '-e', script])
+        if code != 0:
+            return []
+        return [{'pid': 0, 'class': name.strip(), 'title': name.strip()}
+                for name in out.split(',') if name.strip()]
+
+    def focus_window(self, title: str, cls: str = None) -> bool:
+        target = cls or title
+        if not target:
+            return False
+        return _run(['open', '-a', target])[0] == 0
+
+    def lock_screen(self) -> bool:
+        return _run(['pmset', 'displaysleepnow'])[0] == 0
+
+
+class WindowsEnvironmentAdapter(EnvironmentAdapter):
+    """Windows: PowerShell / reg / cmd / tasklist. Sin WM X11.
+
+    Las capacidades se declaran solo si la herramienda está en PATH; launch-
+    or-focus reutiliza LIST_WINDOWS (tasklist) + focus_window (AppActivate).
+    """
+
+    name = 'windows'
+
+    def capabilities(self) -> set:
+        caps = set()
+        if _has('cmd', 'powershell'):
+            caps.add(Capability.LAUNCH_APP)
+        if _has('powershell', 'reg'):
+            caps.add(Capability.SET_WALLPAPER)
+        if _has('reg'):
+            caps.add(Capability.SET_DARK_MODE)
+        if _has('tasklist'):
+            caps.add(Capability.LIST_WINDOWS)
+        if _has('rundll32'):
+            caps.add(Capability.LOCK_SCREEN)
+        return caps
+
+    def set_wallpaper(self, path: str) -> bool:
+        """SPI_SETDESKWALLPAPER vía PowerShell; fallback al registro."""
+        if _has('powershell'):
+            ps = (
+                'Add-Type -TypeDefinition "'
+                'using System;using System.Runtime.InteropServices;'
+                'public class TmWall{'
+                '[DllImport(\\"user32.dll\\",CharSet=CharSet.Unicode,SetLastError=true)]'
+                'public static extern bool SystemParametersInfo(uint a,uint b,string c,uint d);'
+                '}";'
+                f'[TmWall]::SystemParametersInfo(20,0,\\"{path}\\",3)'
+            )
+            code, _, err = _run(['powershell', '-NoProfile', '-Command', ps])
+        elif _has('reg'):
+            key = r'HKCU\Control Panel\Desktop'
+            code, _, err = _run(['reg', 'add', key, '/v', 'Wallpaper',
+                                 '/t', 'REG_SZ', '/d', path, '/f'])
+            if code == 0:
+                _run(['rundll32', 'user32.dll,UpdatePerUserSystemParameters'])
+        else:
+            return False
+        if code != 0:
+            logger.error(f"wallpaper (windows): {err}")
+        return code == 0
+
+    def set_dark_mode(self, dark: bool) -> bool:
+        """AppsUseLightTheme: 0 = oscuro, 1 = claro."""
+        value = '0' if dark else '1'
+        key = (r'HKCU\Software\Microsoft\Windows\CurrentVersion'
+               r'\Themes\Personalize')
+        code, _, err = _run(['reg', 'add', key, '/v', 'AppsUseLightTheme',
+                             '/t', 'REG_DWORD', '/d', value, '/f'])
+        if code != 0:
+            logger.error(f"reg dark mode: {err}")
+        return code == 0
+
+    def launch_app(self, command: str) -> bool:
+        return _run(['cmd', '/c', 'start', '', command])[0] == 0
+
+    def list_windows(self) -> List[dict]:
+        code, out, err = _run(['tasklist', '/FO', 'CSV', '/NH'])
+        if code != 0:
+            return []
+        windows = []
+        for line in out.splitlines():
+            parts = [p.strip().strip('"') for p in line.split(',')]
+            if len(parts) >= 2 and parts[1].isdigit():
+                windows.append({'pid': int(parts[1]), 'class': parts[0],
+                                'title': parts[0]})
+        return windows
+
+    def focus_window(self, title: str, cls: str = None) -> bool:
+        target = cls or title
+        if not target:
+            return False
+        ps = f'(New-Object -ComObject WScript.Shell).AppActivate(\\"{target}\\")'
+        return _run(['powershell', '-NoProfile', '-Command', ps])[0] == 0
+
+    def lock_screen(self) -> bool:
+        return _run(['rundll32', 'user32.dll,LockWorkStation'])[0] == 0
+
+
 class EnvironmentDetector:
     """Detecta el entorno activo por variables de sesión y CLIs [ENV]."""
 
@@ -455,6 +618,13 @@ class EnvironmentDetector:
 
         if DistributionDetector.is_termux():
             return TermuxEnvironmentAdapter()
+
+        # El SO manda antes que cualquier WM/DE (que son propios de Linux).
+        system = platform.system()
+        if system == 'Darwin':
+            return MacOSEnvironmentAdapter()
+        if system == 'Windows':
+            return WindowsEnvironmentAdapter()
 
         # WMs tiling por orden de especificidad
         if os.environ.get('HYPRLAND_INSTANCE_SIGNATURE'):
