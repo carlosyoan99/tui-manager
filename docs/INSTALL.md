@@ -164,7 +164,7 @@ python -m pip install -e .
 tui-manager --version
 ```
 
-La configuración se lee desde `~/.config/tui-manager/config.yaml`; puedes
+La configuración se lee desde `~/.config/tui-manager/config.yaml` (XDG; logs en `~/.local/state/tui-manager/` y snapshots en `~/.local/share/tui-manager/`); puedes
 partir de `config/default.yaml` del repositorio si quieres personalizarla.
 
 ## Verificación

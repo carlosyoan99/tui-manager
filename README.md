@@ -3,152 +3,139 @@
 [![CI](https://github.com/carlosyoan99/tui-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/carlosyoan99/tui-manager/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20BSD-lightgrey.svg)](https://www.linux.org/)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20BSD%20%7C%20macOS%20%7C%20Windows%20%7C%20Termux-lightgrey.svg)](https://github.com/carlosyoan99/tui-manager)
 
-## Definición
+**Versión actual: 2.0.0 (estable)** · 469 tests verdes en 4 equipos · CI verde en Linux + FreeBSD.
 
-**TUI Manager** es una aplicación de Interfaz de Usuario Terminal (TUI), escrita en Python, que **simula el flujo de control de Omarchy** (la distribución opinionated de DHH basada en Arch + Hyprland) sin ser una distribución: es un **panel de control portátil** que vive en la terminal y da acceso por menú a lo que Omarchy resuelve con sus scripts y su lanzador.
+## ¿Qué es?
 
-Su propósito: desde un solo menú jerárquico, navegable 100 % por teclado, poder:
+Un **panel de control en la terminal** inspirado en [Omarchy Quattro](https://github.com/basecamp/omarchy), escrito en Python con [textual](https://textual.textualize.io/). No es una distribución: es un menú jerárquico, navegable 100 % por teclado (y con mouse/táctil), que reúne en un solo lugar lo que antes hacías con varios comandos:
 
-- **Gestionar aplicaciones**: ver lo instalado, buscar, instalar/desinstalar, actualizar el sistema y limpiar huérfanos.
-- **Monitorear y controlar procesos**: tiempo real, CPU/RAM, terminar, renicear.
-- **Configurar el sistema**: toggles y ajustes del entorno (idle, notificaciones, brillo, energía, red, zona horaria).
-- **Cambiar temas**: cambiar la apariencia del escritorio completo desde un tema (colores, wallpaper, terminal, barra), estilo Omarchy "pick a theme, change everything".
+- **Aplicaciones**: ver lo instalado, buscar, instalar/desinstalar (incluido por lote), actualizar y limpiar huérfanos.
+- **Procesos**: monitor en tiempo real con CPU/RAM, filtros, orden por 5 criterios, kill, renice y pausa.
+- **Sistema**: bloqueo, energía, brillo, perfiles, zona horaria y lanzar apps (con degradación elegante: lo que tu entorno no soporta aparece desactivado con el motivo).
+- **Temas**: packs YAML que cambian paleta, wallpaper y modo claro/oscuro por superficie, con backups `.bak-tm`. El tema de la TUI puede seguir dinámicamente el esquema [matugen](https://github.com/InioX/matugen) que genera Noctalia desde tu wallpaper.
+- **Actualizar, Ajustes, Ayuda, Acerca de y Logs**, más un **catálogo de 179 apps** en 29 categorías con fuentes alternativas (GitHub, Flatpak, Snap, AppImage) que siempre piden confirmación.
 
-**La diferencia clave con Omarchy**: Omarchy es una distribución atada a Arch + Hyprland + Quickshell. TUI Manager es **portable**: funciona sobre múltiples sistemas operativos (Linux y BSD), múltiples entornos de escritorio y —foco principal— **window managers** (tiling o no), degradándose con elegancia cuando el entorno no soporta una función.
+La diferencia con Omarchy: Omarchy está atado a Arch + Hyprland + Quickshell. TUI Manager corre sobre **Linux, BSD, macOS, Windows y Termux**, sobre WMs, DEs o TTY, adaptándose a lo que cada entorno expone.
 
-### Alcance de plataformas
+## Inicio rápido
 
-| Nivel | Plataformas | Notas |
-|---|---|---|
-| Objetivo principal | **Debian/Ubuntu, Arch y derivados, Fedora, Void, Gentoo, OpenSUSE, Alpine, FreeBSD** | Foco en gestores de ventanas |
-| Objetivo secundario | NetBSD, OpenBSD, derivados de las anteriores | Vía adaptadores del mismo plano |
-| Limitado | **Termux/Android** | Paquetes del prefix (apt/`pkg`), procesos propios, temas internos de la TUI; sin sudo ni toggles de sistema |
-| Futuro 2.0 | **macOS** (Homebrew, `defaults`, `osascript`) · **Windows** (winget/scoop/choco, `tasklist`) | Planificado; ver fase «2.0» en [docs/ROADMAP.md](docs/ROADMAP.md) |
-
-| Nivel | Entornos | Soporte esperado |
-|---|---|---|
-| Completo | **WMs tiling**: Hyprland, Sway, i3, bspwm, dwm, awesome, Qtile | Reload de config, gaps, keybinds, bar |
-| Completo | **WMs apilables**: Openbox, Fluxbox, IceWM | Menor superficie, misma interfaz |
-| Parcial | **DEs**: KDE Plasma, GNOME, XFCE, MATE, Cinnamon, LXQt | Solo lo que el DE expone por herramienta propia |
-| Básico | **TTY / sin entorno** | Paquetes, procesos, tema interno de la TUI |
-
-## Novedades 2.0
-
-- **Accesibilidad táctil y mouse:** modales con botones clicables (Sí/No, Aceptar/Cancelar, Cancelar), clic en la columna «Marcar», `Select` de orden de procesos y botón `?`. Los atajos de teclado siguen funcionando.
-- **sudo seguro:** usa `sudo -n` si hay credenciales en caché; si no, suspende la TUI y solicita la contraseña con `sudo -v` en el TTY real (`doas` en BSD). La contraseña nunca se guarda ni se pasa por argumento.
-- **Estado:** `2.0.0-beta.1` (Beta A completada) — 399 tests verdes en notebook, laptop y void; móvil en verificación; CI de GitHub verde en Linux 3.10–3.13 y FreeBSD 13.4/14.2. Los adapters de **macOS y Windows están en progreso** dentro de la fase 2.0 (validación por simulación, aún no en esos SO). Ver [ROADMAP](docs/ROADMAP.md), [QA-REPORT](docs/QA-REPORT.md) y [PLAN-2.0-BETAS](docs/PLAN-2.0-BETAS.md).
-
-## Funcionamiento
-
-### Arquitectura en capas
-
-```
-┌─────────────────────────────────────────────────┐
-│  UI (textual): menús Omarchy-style, pantallas,  │
-│  atajos de teclado, temas internos de la TUI    │
-├─────────────────────────────────────────────────┤
-│  Core: ScreenManager · Config · EventEmitter    │
-│  PackageManager · ProcessMonitor · ThemeManager │
-│  EnvironmentManager (nuevo)                     │
-├──────────────────────┬──────────────────────────┤
-│  Plano de SO         │  Plano de entorno        │
-│  PackageAdapter por  │  EnvironmentAdapter por  │
-│  SO/distro:          │  DE/WM, con modelo de    │
-│  apt · pacman · dnf  │  capacidades:            │
-│  xbps · emerge · zypper│ HyprlandAdapter (hyprctl)│
-│  apk · pkg (FreeBSD) │  SwayAdapter (swaymsg)   │
-│                      │  I3Adapter (i3-msg)      │
-│                      │  KDE/GNOME/XFCE (gsettings│
-│                      │  kdeglobals, xfconf4)    │
-│                      │  NullAdapter (TTY)       │
-├──────────────────────┴──────────────────────────┤
-│  Sistema real: subprocesos, sudo/doas,          │
-│  /etc, ~/.config, ps, env vars de sesión        │
-└─────────────────────────────────────────────────┘
+```bash
+tm              # abre la TUI (comando disponible en tus 4 equipos)
+tm --version    # tui-manager 2.0.0
+tm --doctor     # diagnóstico: SO, distro, gestor, entorno, CLIs, capacidades, elevación
+tm --quickstart # recorrido guiado por las 10 entradas del menú
+tm --json doctor|packages|processes   # salida estructurada para scripts/agentes
+tm --lang en    # interfaz en inglés
 ```
 
-### Flujo de arranque
+Si `tm` no está en tu PATH, el comando real es `python3 -m tui_manager.main` desde la carpeta del proyecto.
 
-1. **Detección de SO**: lee `/etc/os-release` (o `uname` en BSD) → elige el `PackageAdapter` correcto.
-2. **Detección de entorno**: variables de sesión (`XDG_CURRENT_DESKTOP`, `WAYLAND_DISPLAY`, `HYPRLAND_INSTANCE_SIGNATURE`, `SWAYSOCK`, `I3SOCK`, `DESKTOP_SESSION`…) → elige el `EnvironmentAdapter` y consulta su **lista de capacidades**. En Termux/Android se detecta vía `PREFIX`/`TERMUX_VERSION` y se usa `NullAdapter` (soporte limitado: paquetes, procesos y temas internos).
-3. **Configuración**: `~/.config/tui-manager/config.yaml` carga tema, intervalos y preferencias.
-4. **Menú principal** (estilo Omarchy): el menú se genera dinámicamente — las entradas que el entorno no soporta aparecen deshabilitadas con su motivo, nunca fallan en tiempo de uso.
+### Instalación desde fuente
 
-### Menú jerárquico (mapeado de Omarchy)
+```bash
+git clone https://github.com/carlosyoan99/tui-manager.git
+cd tui-manager
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
+tui-manager
+```
 
-| Menú TUI Manager | Equivalente Omarchy | Contenido |
+En Termux no se puede crear venv (`ensurepip` no disponible): se usa `python3 -m tui_manager.main` con el `textual` del sistema.
+
+## El menú (atajos `[1]`–`[9]` y `[0]`)
+
+| Tecla | Pantalla | Qué hace |
 |---|---|---|
-| **Aplicaciones** | `omarchy-pkg-*`, menú Install | Instalados, buscar, instalar, desinstalar, huérfanos |
-| **Procesos** | btop integrado | Lista en vivo, filtros, kill, renice |
-| **Sistema** | `omarchy-toggle-*`, system-* | Bloquear/salir/reiniciar/apagar, idle, notificaciones, brillo, energía, zona horaria, DNS |
-| **Temas** | `omarchy-theme-*` | Tema global, wallpaper siguiente/anterior, claro/oscuro, terminal |
-| **Actualizar** | `omarchy-update-*` | Ver disponibles, actualizar sistema, keyring/firmware, limpiar caché |
-| **Ajustes** | Config propia | Tema de la TUI, intervalos, logging, sudo/doas |
-| **Ayuda** | Manual | Atajos, diagnóstico (`tui-manager --doctor`) |
+| `[1]` | Aplicaciones | Instalar/desinstalar, buscar, caché, upgrade, huérfanos; `Espacio` marca para lote |
+| `[2]` | Procesos | CPU/RAM, filtros, orden, kill, renice, pausa |
+| `[3]` | Sistema | Energía, brillo, toggles y launch-or-focus según capacidades |
+| `[4]` | Temas | Packs, wallpaper siguiente/anterior, claro/oscuro, instalar desde URL |
+| `[5]` | Actualizar | Actualizaciones, caché, huérfanos, fwupd opcional |
+| `[6]` | Ajustes | Tema de la TUI, origen del tema (manual/matugen), idioma, intervalo |
+| `[7]` | Ayuda | Atajos y sugerencia de `--doctor` |
+| `[8]` | Acerca de | Info estilo fastfetch: SO, dispositivo, GPU, RAM, pantallas, batería… |
+| `[9]` | Logs | Cola del log con refresco |
+| `[0]` | Catálogo de apps | 179 apps, marcar e instalar por lote desde fuentes verificadas |
 
-### Principios de diseño
+**Atajos útiles:** `?` ayuda contextual · `Esc` volver · `y/n` en confirmaciones (también botones clicables) · `s` cicla el orden de procesos · `Espacio` marca apps.
 
-1. **Degradación elegante**: toda acción consulta capacidades del adaptador de entorno; una función no soportada se ve deshabilitada, no rota.
-2. **Confirmación antes de acciones destructivas**: desinstalar, matar procesos, tocar configuración del WM.
-3. **No romper configs del sistema**: antes de modificar un archivo de configuración ajeno (Hyprland, waybar, GTK), copia de seguridad automática.
-4. **Todo por teclado**: navegación con flechas/vim-keys, `?` ayuda, `q` salir, un atajo por entrada de menú.
-5. **Adaptadores = extensibilidad**: un nuevo SO o WM es una clase nueva, no un cambio en el resto del código.
+## Plataformas
 
-## Documentación
+| Nivel | Sistemas |
+|---|---|
+| Completo | Debian/Ubuntu, Arch (CachyOS, Manjaro…), Fedora, Void, FreeBSD |
+| Completo | **macOS** (Homebrew, `defaults`, `osascript`) y **Windows** (winget/scoop/choco, `reg`, `powershell`) — validados por simulación |
+| Limitado | NetBSD, OpenBSD (pkgsrc), Gentoo, OpenSUSE, Alpine |
+| Limitado | Termux/Android: paquetes del prefix, procesos propios, tema interno |
+| Entornos | WMs tiling (Hyprland, Sway, i3, bspwm), WMs apilables, DEs (KDE, GNOME, XFCE) y TTY |
 
-- [Guía de Instalación](docs/INSTALL.md)
-- [Guía de Uso](docs/USAGE.md)
-- [Documentación de la API](docs/API.md)
-- [Especificaciones por Módulo](docs/MODULE_SPECS.md)
-- [Especificaciones Técnicas](docs/TECHNICAL_SPECS.md)
-- [Roadmap y plan por fases](docs/ROADMAP.md)
-- [Resumen del proyecto](PROJECT_SUMMARY.md)
+## Configuración (XDG)
 
-## Comunidad
+La app no ensucia tu carpeta personal:
 
-- [Contribuir](CONTRIBUTING.md) — entorno de desarrollo, estilo y proceso de PR.
-- [Seguridad](SECURITY.md) — cómo reportar vulnerabilidades de forma privada.
-- [Código de Conducta](CODE_OF_CONDUCT.md) — estándares de convivencia y reportes.
-- [Demo visual](docs/DEMO.md) — guion para grabar con `vhs` o `asciinema`.
+| Dato | Ruta |
+|---|---|
+| Configuración | `~/.config/tui-manager/config.yaml` (`$XDG_CONFIG_HOME`) |
+| Logs | `~/.local/state/tui-manager/logs/app.log` (`$XDG_STATE_HOME`) |
+| Snapshots | `~/.local/share/tui-manager/snapshots/` (`$XDG_DATA_HOME`) |
 
-El repositorio oficial es [carlosyoan99/tui-manager](https://github.com/carlosyoan99/tui-manager).
-El estado de la CI se muestra en el badge de arriba, que apunta al
-[workflow real](https://github.com/carlosyoan99/tui-manager/actions/workflows/ci.yml).
+Si tenías la antigua `~/.tui-manager/`, el código la lee como fallback para no perder ajustes, pero escribe siempre en la nueva ruta.
+
+## Seguridad
+
+- Las acciones destructivas piden confirmación y dejan rastro en el log de auditoría (`AuditLog`).
+- Instalar desde fuentes externas **siempre notifica y pide OK**; el rollback solo revierte directorios vacíos creados por el propio comando, nunca borra archivos del usuario.
+- `sudo` nunca se guarda ni se pasa por argumento: se usa `sudo -n` si hay credenciales cacheadas; si no, se suspende la TUI y se ejecuta `sudo -v` en el TTY real (funciona también por SSH). En BSD se usa `doas`.
 
 ## Estructura del proyecto
 
 ```
 TUI-Manager/
 ├── tui_manager/
-│   ├── main.py               # Punto de entrada
+│   ├── main.py                 # CLI: --version/--doctor/--quickstart/--json/--lang
+│   ├── i18n.py                 # español / inglés
 │   ├── core/
-│   │   ├── distribution.py   # Detección de SO/distro (Linux, BSD, Termux)
-│   │   ├── environment.py    # detección DE/WM + capacidades
-│   │   ├── package_manager.py + *_adapter.py  # plano de SO
-│   │   ├── categories.py · app_catalog.py     # categorías y apps recomendadas
-│   │   ├── alternative_sources.py · sources_adapter.py  # fuentes externas
-│   │   ├── process_monitor.py
-│   │   ├── theme_manager.py · theme_packs.py
-│   │   ├── sysinfo.py · system_control.py
-│   │   ├── config.py · event.py
-│   ├── i18n.py               # español / inglés
-│   └── ui/                   # pantallas y menús textual (app.py, screens.py)
-├── config/                   # default.yaml y packs de temas
-├── docs/                     # Documentación
-└── tests/                    # suite simulada multi-SO + UI + CLI
+│   │   ├── adapters por SO     # debian, arch, fedora, void, termux, freebsd,
+│   │   │                       # pkgsrc, macos, windows
+│   │   ├── environment.py      # adapters de DE/WM (capacidades)
+│   │   ├── system_control.py   # energía, brillo, bloqueo… por plataforma
+│   │   ├── app_catalog.py      # 179 apps / 29 categorías
+│   │   ├── alternative_sources.py · sources_adapter.py · stacks.py · snapshots.py
+│   │   ├── paths.py            # rutas XDG
+│   │   ├── audit.py · perf.py · sysinfo.py · config.py · theme_packs.py
+│   └── ui/
+│       ├── app.py              # TuiManagerApp (inyección de servicios)
+│       ├── screens.py          # las 10 pantallas + modales clicables
+│       └── theme_mutagen.py    # paleta dinámica desde matugen
+├── config/                     # default.yaml + 5 packs de tema
+├── packaging/                  # PKGBUILD, debian/, spec RPM, port FreeBSD
+├── tests/                      # 469 tests simulados (multi-SO, sin red real)
+├── docs/                       # ver índice abajo
+├── CONTRIBUTING.md · SECURITY.md · CODE_OF_CONDUCT.md
+├── AGENTS.md                   # guía para agentes de IA
+└── .github/workflows/ci.yml    # Linux 3.10–3.13 + FreeBSD 13.4/14.2
 ```
 
-## Estado
+## Documentación
 
-**2.0.0 Estable** — panel multiplataforma (Linux, BSD, macOS, Windows) con interfaz táctil, sudo seguro y configuración XDG.
+- Para usuarios: [USAGE.md](docs/USAGE.md) · [INSTALL.md](docs/INSTALL.md) · [DEMO.md](docs/DEMO.md)
+- Técnica: [API.md](docs/API.md) · [TECHNICAL_SPECS.md](docs/TECHNICAL_SPECS.md) · [MODULE_SPECS.md](docs/MODULE_SPECS.md)
+- Planificación: [ROADMAP.md](docs/ROADMAP.md) · [INVESTIGACION-MERCADO.md](docs/INVESTIGACION-MERCADO.md)
+- Trazabilidad: [CHANGELOG.md](CHANGELOG.md) · [docs/QA-REPORT.md](docs/QA-REPORT.md) · [docs/RETROSPECTIVA.md](docs/RETROSPECTIVA.md)
+- Idea original: [docs/especificaciones_tui_app.md](docs/especificaciones_tui_app.md)
+
+## Desarrollo
+
+```bash
+.venv/bin/python -m pytest -q
+.venv/bin/python -m pytest --cov=tui_manager.core --cov-report=term -q
+```
+
+La suite es 100 % simulada (`FakeRunner`, `monkeypatch`): ningún test ejecuta `sudo`, `pacman`, `brew`, `winget` ni red. La CI corre en GitHub Actions con la misma suite en 6 combinaciones de SO/Python.
 
 ## Licencia
 
-MIT.
-
-## Agradecimientos
-
-- Inspirado en [Omarchy](https://github.com/basecamp/omarchy) de DHH (especialmente la charla *Omarchy Quattro*).
-- Frameworks: [textual](https://textual.textualize.io/).
+[MIT](LICENSE) — Carlos Yoan.

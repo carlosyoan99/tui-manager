@@ -1,6 +1,6 @@
 # Roadmap — TUI Manager
 
-Plan por fases: alfas → betas → 1.0 estable. Cada fase tiene **criterios de salida verificables**; una fase no se cierra hasta cumplirlos todos.
+Plan por fases: alfas → betas → 1.0 estable → 2.0 multiplataforma (completado). Cada fase tiene **criterios de salida verificables**; una fase no se cierra hasta cumplirlos todos.
 
 **Distribución de alcance (decisión 2026-11-18):** las **alfas** concentran el grueso de la funcionalidad (≈90 %): cada pantalla, acción y atajo nuevo entra en una alfa. Las **betas** cubren el 10 % restante y sobre todo **pulido, integración entre pantallas, coherencia visual/UX y corrección de errores** sobre lo ya implementado. La **1.0 estable** se declara solo cuando todo funciona, está validado en las plataformas objetivo y no quedan criterios pendientes.
 
@@ -63,7 +63,7 @@ Trabajo:
 
 ---
 
-## Fase Alfa 3 — `0.3.x` «Temas, Actualizar e interfaz» *(actual)*
+## Fase Alfa 3 — `0.3.x` «Temas, Actualizar e interfaz» ✅ (completada)
 
 **Objetivo**: completar el grueso de las funciones restantes: el momento insignia de los temas, el menú Actualizar, los huérfanos y la capa de interfaz/atajos.
 
@@ -153,9 +153,9 @@ Trabajo:
 - [ ] i18n: español e inglés (esqueleto de traducciones).
 - [ ] Logging de auditoría de acciones destructivas (kill, remove, writes) [seguridad].
 - [ ] Docs al día con la realidad: USAGE con capturas asciinema, API, INSTALL por plataforma.
-- [ ] **C · Stacks recomendados** [OM] (diferido de Alfa 4): catálogo por rol que instala en lote.
+- [x] **C · Stacks recomendados** [OM]: catálogo por rol que instala en lote (Beta 2).
 - [ ] **D · fwupd opcional** [OM] (diferido de la decisión 6): sección solo si `fwupdmgr` está presente.
-- [ ] **F · Snapshots extendidos** [OM] (diferido de Alfa 4): backup/restore de configs del WM y bar sobre `.bak-tm`; nunca snapshots de sistema.
+- [x] **F · Snapshots extendidos** [OM]: backup/restore de configs sobre `.bak-tm`; nunca snapshots de sistema (Beta 2).
 
 **Criterios de salida:**
 1. Instalable en Debian, Arch, Fedora y FreeBSD desde sus canales naturales, sin pasos manuales de dependencias.
@@ -267,9 +267,9 @@ Adoptadas al roadmap (2026-11-18) como fase siguiente a 1.0. Se priorizarán des
 
 ---
 
-## 2.0 — macOS y Windows (en curso, vía betas)
+## 2.0 — macOS y Windows ✅ (completada en 2.0.0)
 
-Soporte **nativo** a macOS y Windows, extendiendo los dos planos de adaptadores (SO y entorno) definidos en la spec técnica. No forma parte de los criterios de 1.0. La versión 2.0 **no se declara** hasta que las tres betas estén cerradas.
+Soporte **nativo** a macOS (Homebrew + `defaults`/`osascript`) y Windows (winget/scoop/choco + `reg`/`powershell`), extendiendo los dos planos de adaptadores (SO y entorno). Validado por simulación en 2.0.0; no forma parte de los criterios de 1.0. La versión 2.0 **no se declara** hasta que las tres betas estén cerradas.
 
 > **Nota de validación (2026-11-20):** entre los hosts del usuario no hay macOS
 > ni Windows (3 laptops Linux + Termux). Por tanto **macOS y Windows se validan

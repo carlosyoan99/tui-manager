@@ -3,10 +3,10 @@
 ## 📋 Información General
 
 **Nombre**: TUI Manager
-**Versión**: 0.1.0
+**Versión**: 2.0.0
 **Lenguaje**: Python 3.10+
 **Licencia**: MIT
-**Estado**: Alfa
+**Estado**: Estable (2.0.0)
 
 ## 🎯 Objetivo
 
