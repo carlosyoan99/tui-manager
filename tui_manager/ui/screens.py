@@ -4,7 +4,8 @@ Pantallas de TUI Manager (Alfa 3).
 - MainMenuScreen: menú principal con atajos 1–9 y todas las entradas activas.
 - PackagesScreen: DataTable de paquetes, instalar/remover/info/caché/buscar.
 - ProcessesScreen: monitor con refresco por intervalo, kill/renice/pausa/orden.
-- ThemesScreen: packs de tema, wallpaper, claro/oscuro, instalar desde URL.
+- ThemesScreen: packs de tema, wallpaper (ciclar/aleatorio), claro/oscuro,
+  instalar desde URL o desde carpeta/archivo YAML local.
 - UpdatesScreen: actualizaciones, upgrade, caché, huérfanos, firmware.
 - SettingsScreen: tema interno, idioma, intervalo de refresco.
 - HelpScreen: atajos contextuales y sugerencia de --doctor; `?` abre la
@@ -17,7 +18,9 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import shutil
+from pathlib import Path
 from typing import Callable
 
 from textual import events, on, work
@@ -45,8 +48,34 @@ from tui_manager.i18n import t
 from tui_manager.ui.app import Services
 from tui_manager.core.distribution import DistributionDetector
 from tui_manager.core.sources_adapter import SourcesAdapter
+from tui_manager.core.snapshots import (
+    DEFAULT_SNAPSHOT_DIR,
+    SnapshotNotFoundError,
+    UnsafePathError,
+    restore_config,
+    snapshot_config,
+)
 
 logger = logging.getLogger(__name__)
+
+# El core no expone API de listado: el almacén guarda un ``snapshot.json``
+# por directorio. Este nombre refleja el manifiesto de core/snapshots.py.
+_SNAPSHOT_MANIFEST = 'snapshot.json'
+
+
+def _snapshot_error(exc: Exception) -> str:
+    """Mensaje accionable para errores del core; nunca un traceback."""
+    if isinstance(exc, UnsafePathError):
+        return f'{t("snapshots.unsafe_path")} — {exc}'
+    if isinstance(exc, SnapshotNotFoundError):
+        return f'{t("snapshots.not_found")} — {exc}'
+    if isinstance(exc, ValueError):
+        return f'{t("snapshots.invalid_name")} — {exc}'
+    if isinstance(exc, FileNotFoundError):
+        return f'{t("snapshots.file_missing")} — {exc}'
+    if isinstance(exc, OSError):
+        return f'{t("snapshots.io_error")} — {exc}'
+    return t('snapshots.io_error')
 
 
 # --------------------------------------------------------------- Iconos ----
@@ -824,10 +853,11 @@ class ProcessesScreen(Screen):
 # -------------------------------------------------------------- Ajustes ----
 
 class SettingsScreen(Screen):
-    """Ajustes: tema interno, idioma, intervalo de refresco."""
+    """Ajustes: tema interno, idioma, intervalo de refresco y snapshots."""
 
     BINDINGS = [
         ('?', 'help', t('common.help')),
+        ('s', 'snapshots', t('snapshots.open')),
         ('escape', 'back', t('common.back')),
     ]
 
@@ -881,6 +911,10 @@ class SettingsScreen(Screen):
             Static(t('settings.interval_help'), classes='hint', markup=False),
             Input(value=str(self.services.config.get('refresh_interval', 2)),
                   id='input-interval', placeholder=t('settings.refresh_interval')),
+            Label(f'[b]{t("snapshots.open")}[/]'),
+            Static(t('snapshots.settings_help'), classes='hint', markup=False),
+            Button(t('snapshots.open'), id='settings-snapshots',
+                   variant='primary', classes='button-compact'),
             # 1.1-B: el aviso de Termux solo aparece en Termux/Android; en
             # el resto de sistemas se muestra una nota neutra y legible.
             Static(self._note_text(), id='settings-note', classes='status',
@@ -918,6 +952,16 @@ class SettingsScreen(Screen):
             self.notify(t('settings.saved'))
         except (TypeError, ValueError):
             self.notify(f'{t("common.error")}: {event.value}', severity='error')
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """El botón «Snapshots» abre el mismo modal que la tecla «s»."""
+        if event.button.id == 'settings-snapshots':
+            self.action_snapshots()
+
+    def action_snapshots(self) -> None:
+        """Abre el modal de snapshots (base_dir inyectable desde Services)."""
+        base_dir = getattr(self.services, 'snapshots_base_dir', None)
+        self.app.push_screen(SnapshotsScreen(base_dir=base_dir))
 
     def action_help(self) -> None:
         """?: ayuda contextual de ajustes."""
@@ -967,6 +1011,15 @@ class HelpScreen(Screen):
             lines.append(t('help.context'))
             lines += [t(key) for key in keys]
         lines += ['', t('help.doctor_hint'), t('settings.termux_note')]
+        # Bloque "Proyecto": licencia, código y canal de contacto (GitHub).
+        lines += [
+            '',
+            t('help.project_title'),
+            t('help.project_header'),
+            t('help.license'),
+            t('help.code'),
+            t('help.contact'),
+        ]
         yield Header(show_clock=True)
         yield Label(f'[b]{screen_icon("HelpScreen")} {t("help.title")}[/]',
                     classes='title')
@@ -991,9 +1044,11 @@ class ThemesScreen(Screen):
         ('a', 'apply', t('themes.apply')),
         ('w', 'wallpaper_next', t('themes.wallpaper_next')),
         ('W', 'wallpaper_prev', t('themes.wallpaper_prev')),
+        ('R', 'wallpaper_random', t('themes.wallpaper_random')),
         ('d', 'dark', t('system.dark_mode')),
         ('l', 'light', t('system.light_mode')),
         ('i', 'install', t('themes.install_url')),
+        ('L', 'install_local', t('themes.install_local')),
         ('r', 'reload', t('common.refresh')),
         ('?', 'help', t('common.help')),
         ('escape', 'back', t('common.back')),
@@ -1015,22 +1070,26 @@ class ThemesScreen(Screen):
         yield Static(t('themes.keys'), id='themes-status', classes='status', markup=False)
         yield Footer()
 
-    def on_mount(self) -> None:
-        self.action_reload()
+    async def on_mount(self) -> None:
+        await self.action_reload()
         self.query_one('#themes-list', ListView).focus()
 
-    def action_reload(self) -> None:
+    async def action_reload(self) -> None:
         from tui_manager.core.theme_packs import list_packs
         self._packs = list_packs()
         menu = self.query_one('#themes-list', ListView)
-        menu.clear()
+        # clear()/extend() devuelven awaitables: hay que esperarlos antes de
+        # reinsertar los ítems o Textual detecta IDs duplicados.
+        await menu.clear()
+        items = []
         for pack in self._packs:
             mode = 'dark' if pack.dark else 'light'
             wallpaper = os.path.basename(pack.wallpaper) if pack.wallpaper else '—'
-            menu.append(ListItem(
+            items.append(ListItem(
                 Static(f'{pack.name}  [dim]({mode}, {wallpaper})[/]'),
                 id=pack.name))
-        if self._packs:
+        if items:
+            await menu.extend(items)
             menu.index = 0
         self.query_one('#themes-status', Static).update(_status(
             f'{t("themes.packs")}: {len(self._packs)}', t('themes.keys'),
@@ -1117,6 +1176,30 @@ class ThemesScreen(Screen):
         self._wall_index[pack.name] = index
         self._wallpaper_worker(files[index])
 
+    def action_wallpaper_random(self) -> None:
+        """Elige un wallpaper al azar (distinto del actual si hay varios)."""
+        from tui_manager.core.environment import Capability
+        pack = self._selected_pack()
+        if not pack:
+            self.notify(t('themes.no_pack'), severity='warning')
+            return
+        env = self.services.environment
+        if not env or not env.supports(Capability.SET_WALLPAPER):
+            self.notify(t('themes.wallpaper_unsupported'), severity='warning')
+            return
+        files = self._wallpapers(pack)
+        if not files:
+            self.notify(t('themes.no_wallpaper'), severity='warning')
+            return
+        current = self._wall_index.get(pack.name, -1)
+        # Con más de un archivo se excluye el índice actual para que el
+        # aleatorio siempre suponga un cambio visible.
+        choices = ([i for i in range(len(files)) if i != current]
+                   if len(files) > 1 else list(range(len(files))))
+        index = random.choice(choices)
+        self._wall_index[pack.name] = index
+        self._wallpaper_worker(files[index])
+
     @work(thread=True, exclusive=False)
     def _wallpaper_worker(self, path: str) -> None:
         try:
@@ -1161,7 +1244,7 @@ class ThemesScreen(Screen):
             self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
                                       severity='error')
 
-    # --- instalar pack desde URL ---
+    # --- instalar pack (URL o carpeta/archivo YAML local) ---
 
     def action_install(self) -> None:
         self.app.push_screen(InputScreen(t('themes.install_url')), self._do_install)
@@ -1175,16 +1258,56 @@ class ThemesScreen(Screen):
     def _install_worker(self, url: str) -> None:
         from tui_manager.core.theme_packs import install_pack_from_url
         try:
-            pack = install_pack_from_url(url)
-            if pack:
-                self.app.call_from_thread(self.notify,
-                                          t('themes.install_ok', name=pack.name))
-                self.app.call_from_thread(self.action_reload)
-            else:
-                self.app.call_from_thread(self.notify, t('themes.install_fail'),
-                                          severity='error')
+            self._notify_install_result(install_pack_from_url(url))
         except Exception as exc:
+            logger.exception('instalar pack desde URL falló')
             self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
+                                      severity='error')
+
+    def action_install_local(self) -> None:
+        """Abre el modal para elegir una carpeta o un YAML local."""
+        self.app.push_screen(InputScreen(t('themes.install_local')),
+                             self._do_install_local)
+
+    def _do_install_local(self, path) -> None:
+        """Valida la ruta antes de lanzar el worker (sin tracebacks)."""
+        if not path:
+            return
+        path = os.path.expanduser(str(path).strip())
+        if not os.path.exists(path):
+            self.notify(t('themes.install_local_not_found', path=path),
+                        severity='warning')
+            return
+        if os.path.isdir(path):
+            yamls = [f for f in os.listdir(path)
+                     if f.lower().endswith(('.yaml', '.yml'))]
+            if not yamls:
+                self.notify(t('themes.install_local_not_yaml'),
+                            severity='warning')
+                return
+        elif not path.lower().endswith(('.yaml', '.yml')):
+            self.notify(t('themes.install_local_not_yaml'), severity='warning')
+            return
+        self._install_local_worker(path)
+
+    @work(thread=True, exclusive=True)
+    def _install_local_worker(self, path: str) -> None:
+        from tui_manager.core.theme_packs import install_pack_from_path
+        try:
+            self._notify_install_result(install_pack_from_path(path))
+        except Exception as exc:
+            logger.exception('instalar pack local falló')
+            self.app.call_from_thread(self.notify, f'{t("common.error")}: {exc}',
+                                      severity='error')
+
+    def _notify_install_result(self, pack) -> None:
+        """Comparte aviso + recarga entre la instalación por URL y la local."""
+        if pack:
+            self.app.call_from_thread(self.notify,
+                                      t('themes.install_ok', name=pack.name))
+            self.app.call_from_thread(self.action_reload)
+        else:
+            self.app.call_from_thread(self.notify, t('themes.install_fail'),
                                       severity='error')
 
     def action_help(self) -> None:
@@ -1792,6 +1915,205 @@ class SelectScreen(ModalScreen):
 
     def action_cancel(self) -> None:
         self.dismiss(None)
+
+
+class SnapshotsScreen(ModalScreen):
+    """Snapshots de configuración: envoltorio TUI de ``core.snapshots``.
+
+    El core valida rutas (nunca btrfs/zfs ni rutas del sistema) y hace las
+    copias; esta pantalla solo lista los snapshots del almacén, pide nombre
+    y rutas con ``InputScreen`` y muestra errores como mensajes accionables.
+    Toda I/O corre en workers con ``LoadingIndicator``.
+    """
+
+    # app.tcss solo estiliza ConfirmScreen/InputScreen; el modal se estiliza
+    # aquí para no tocar la hoja de estilos (comparte .dialog con los otros).
+    CSS = """
+    SnapshotsScreen {
+        align: center middle;
+        background: $background 60%;
+    }
+    """
+
+    BINDINGS = [
+        ('n', 'create', t('snapshots.create')),
+        ('r', 'restore', t('snapshots.restore')),
+        ('ctrl+r', 'refresh', t('common.refresh')),
+        ('escape', 'close', t('common.close')),
+    ]
+
+    def __init__(self, base_dir=None):
+        super().__init__()
+        # Inyectable en tests: si no se da, se usa la ruta XDG del core.
+        self.base_dir = (Path(base_dir) if base_dir is not None
+                         else Path(DEFAULT_SNAPSHOT_DIR))
+        self._names: list[str] = []
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes='dialog'):
+            yield Label(f'[b]{t("snapshots.title")}[/]')
+            yield Static(t('snapshots.hint'), classes='hint', markup=False)
+            with Horizontal(classes='button-row'):
+                yield Button(t('snapshots.create'), id='snapshots-create',
+                             variant='primary', classes='button-compact')
+                yield Button(t('snapshots.restore'), id='snapshots-restore',
+                             classes='button-compact')
+                yield Button(t('common.refresh'), id='snapshots-refresh',
+                             classes='button-compact')
+                yield Button(t('common.close'), id='snapshots-close',
+                             classes='button-compact')
+            yield ListView(id='snapshots-list')
+            yield Static('', id='snapshots-status', classes='status',
+                         markup=False)
+            yield LoadingIndicator(id='snapshots-loading')
+            yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one('#snapshots-loading', LoadingIndicator).display = True
+        self.query_one('#snapshots-list', ListView).focus()
+        self._load()
+
+    # ------------------------------------------------ listing / estado ----
+
+    def _list_names(self) -> list[str]:
+        """Lista los snapshots del almacén (el core no expone esta API)."""
+        store = self.base_dir
+        if not store.is_dir():
+            return []
+        return sorted(child.name for child in store.iterdir()
+                      if child.is_dir()
+                      and (child / _SNAPSHOT_MANIFEST).is_file())
+
+    @work(thread=True, exclusive=True)
+    def _load(self) -> None:
+        try:
+            names = self._list_names()
+        except Exception as exc:
+            self.app.call_from_thread(self._fail, _snapshot_error(exc))
+            return
+        self.app.call_from_thread(self._fill, names)
+
+    async def _fill(self, names: list[str]) -> None:
+        self._names = list(names)
+        view = self.query_one('#snapshots-list', ListView)
+        # ListView.clear() es asíncrono: hay que esperarlo antes de reutilizar
+        # los IDs, o textual detecta IDs duplicados al repoblar la lista.
+        await view.clear()
+        for index, name in enumerate(self._names):
+            view.append(ListItem(Static(name, markup=False),
+                                 id=f'snap-{index}'))
+        if self._names:
+            view.index = 0
+        count = len(self._names)
+        text = (t('snapshots.count').format(n=count) if count
+                else t('snapshots.empty'))
+        self.query_one('#snapshots-status', Static).update(
+            f'{text} — {t("snapshots.keys")}')
+        self.query_one('#snapshots-loading', LoadingIndicator).display = False
+
+    def _fail(self, message: str) -> None:
+        self.query_one('#snapshots-status', Static).update(message)
+        self.query_one('#snapshots-loading', LoadingIndicator).display = False
+        self.notify(message, severity='error')
+
+    async def _finish(self, message: str, names: list[str]) -> None:
+        self.notify(message)
+        await self._fill(names)
+
+    # ------------------------------------------------------------ crear ----
+
+    def action_create(self) -> None:
+        app = self.app
+        app.push_screen(InputScreen(t('snapshots.name_prompt')),
+                        lambda name: self._name_chosen(name))
+
+    def _name_chosen(self, name) -> None:
+        if not name:
+            return
+        self.app.push_screen(
+            InputScreen(t('snapshots.paths_prompt')),
+            lambda paths: self._paths_chosen(name, paths))
+
+    def _paths_chosen(self, name: str, raw_paths) -> None:
+        if not raw_paths:
+            return
+        paths = [part.strip() for part in raw_paths.replace('\n', ',').split(',')
+                 if part.strip()]
+        if not paths:
+            self.notify(t('snapshots.no_paths'), severity='error')
+            return
+        self.query_one('#snapshots-loading', LoadingIndicator).display = True
+        self._create(name, paths)
+
+    @work(thread=True, exclusive=True)
+    def _create(self, name: str, paths: list[str]) -> None:
+        try:
+            manifest = snapshot_config(name, paths, base_dir=self.base_dir)
+            names = self._list_names()
+        except Exception as exc:
+            self.app.call_from_thread(self._fail, _snapshot_error(exc))
+            return
+        self.app.call_from_thread(
+            self._finish,
+            t('snapshots.created').format(name=name,
+                                          count=len(manifest['items'])),
+            names)
+
+    # -------------------------------------------------------- restaurar ----
+
+    def action_restore(self) -> None:
+        index = self.query_one('#snapshots-list', ListView).index
+        if index is None or not (0 <= index < len(self._names)):
+            self.notify(t('snapshots.select_one'), severity='warning')
+            return
+        name = self._names[index]
+        self.app.push_screen(
+            ConfirmScreen(f'{t("snapshots.restore_confirm")} {name}?'),
+            lambda ok: self._restore_confirmed(name, ok))
+
+    @on(ListView.Selected)
+    def selected(self, event: ListView.Selected) -> None:
+        """Enter sobre un snapshot pide confirmación para restaurarlo."""
+        self.action_restore()
+
+    def _restore_confirmed(self, name: str, ok) -> None:
+        if not ok:
+            return
+        self.query_one('#snapshots-loading', LoadingIndicator).display = True
+        self._restore(name)
+
+    @work(thread=True, exclusive=True)
+    def _restore(self, name: str) -> None:
+        try:
+            restore_config(name, base_dir=self.base_dir)
+            names = self._list_names()
+        except Exception as exc:
+            self.app.call_from_thread(self._fail, _snapshot_error(exc))
+            return
+        self.app.call_from_thread(
+            self._finish,
+            t('snapshots.restored').format(name=name), names)
+
+    # --------------------------------------------------------- genérico ----
+
+    def action_refresh(self) -> None:
+        self.query_one('#snapshots-loading', LoadingIndicator).display = True
+        self._load()
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Botones clicables: las mismas acciones que las teclas."""
+        actions = {
+            'snapshots-create': self.action_create,
+            'snapshots-restore': self.action_restore,
+            'snapshots-refresh': self.action_refresh,
+            'snapshots-close': self.action_close,
+        }
+        action = actions.get(event.button.id or '')
+        if action is not None:
+            action()
 
 
 class AppsScreen(Screen):

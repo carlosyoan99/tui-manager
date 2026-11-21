@@ -374,6 +374,44 @@ async def test_help_screen_content(tmp_path, monkeypatch):
         assert 'tui-manager --doctor' in text
 
 
+def test_help_project_i18n_keys_are_translated():
+    """Las claves nuevas del bloque Proyecto existen y devuelven texto."""
+    from tui_manager.i18n import STRINGS, t
+
+    keys = ('help.project_title', 'help.project_header', 'help.license',
+            'help.code', 'help.contact')
+    for lang, strings in STRINGS.items():
+        for key in keys:
+            assert key in strings, f'{key} falta en {lang}'
+        assert 'MIT' in strings['help.license']
+        assert 'https://github.com/carlosyoan99/tui-manager' in strings['help.code']
+        assert 'https://github.com/carlosyoan99/tui-manager/issues' in strings['help.contact']
+    for key in keys:
+        assert t(key) != key, f't("{key}") devolvió la clave'
+
+
+@pytest.mark.asyncio
+async def test_help_screen_shows_project_info_without_email(tmp_path,
+                                                            monkeypatch):
+    """La ayuda muestra licencia, GitHub y contacto, sin exponer correos."""
+    from tui_manager.i18n import t
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.press('?')
+        await pilot.pause()
+        from tui_manager.ui.screens import HelpScreen
+        assert isinstance(app.screen, HelpScreen)
+        text = str(app.screen.query_one('#help-text').render())
+
+    assert 'MIT' in text
+    assert 'https://github.com/carlosyoan99/tui-manager' in text
+    assert 'GitHub Issues' in text
+    assert t('help.contact') in text
+    assert '@' not in text, 'la ayuda no debe exponer direcciones de correo'
+
+
 # ----------------------------------------------------------- fachada ----
 
 def test_screen_manager_requires_services_for_run():
@@ -637,6 +675,174 @@ async def test_themes_wallpaper_unsupported(tmp_path, monkeypatch):
         app.screen.action_wallpaper_next()
         await pilot.pause()
         assert services.environment.wallpapers == []
+
+
+@pytest.mark.asyncio
+async def test_themes_wallpaper_random(tmp_path, monkeypatch):
+    """[R] elige un archivo al azar, distinto del índice actual."""
+    services = make_services(tmp_path, monkeypatch)
+    services.environment = fake_env(['SET_WALLPAPER'])
+    _write_user_pack(tmp_path, 'custom-wall',
+                     wallpapers=['a.png', 'b.png', 'c.png'])
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press('4')
+        await pilot.pause()
+        from textual.widgets import ListView
+        from tui_manager.ui.screens import ThemesScreen
+        assert isinstance(app.screen, ThemesScreen)
+        menu = app.screen.query_one('#themes-list', ListView)
+        menu.index = [item.id for item in menu.children].index('custom-wall')
+        await pilot.pause()
+
+        app.screen.action_wallpaper_next()  # índice 0 → a.png
+        await _wait_workers(app, pilot)
+        assert services.environment.wallpapers[-1].endswith('a.png')
+
+        seen = {}
+
+        def fake_choice(seq):
+            seen['seq'] = list(seq)
+            return seq[-1]
+
+        monkeypatch.setattr('tui_manager.ui.screens.random.choice', fake_choice)
+        await pilot.press('R')  # R = aleatorio (r sigue siendo recargar)
+        await _wait_workers(app, pilot)
+
+        assert seen['seq'] == [1, 2]   # el índice actual (0) se excluye
+        assert services.environment.wallpapers[-1].endswith('c.png')
+        assert len(services.environment.wallpapers) == 2
+
+
+@pytest.mark.asyncio
+async def test_themes_install_local_file(tmp_path, monkeypatch):
+    """[L] copia un YAML local al directorio de packs y recarga la lista."""
+    from tui_manager.i18n import t
+    services = make_services(tmp_path, monkeypatch)
+    incoming = tmp_path / 'incoming'
+    incoming.mkdir()
+    import yaml
+    source = incoming / 'from-disk.yaml'
+    source.write_text(yaml.safe_dump({
+        'name': 'from-disk', 'dark': False,
+        'palette': {'background': '#222222'},
+    }), encoding='utf-8')
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press('4')
+        await pilot.pause()
+        from tui_manager.ui.screens import InputScreen, ThemesScreen
+        assert isinstance(app.screen, ThemesScreen)
+
+        await pilot.press('L')
+        await pilot.pause()
+        assert isinstance(app.screen, InputScreen)
+        assert app.screen.prompt == t('themes.install_local')
+        app.screen.query_one('#modal-input').value = str(source)
+        await pilot.press('enter')
+        await _wait_workers(app, pilot)
+
+        installed = (tmp_path / '.config' / 'tui-manager' / 'themes'
+                     / 'from-disk.yaml')
+        assert installed.exists()
+        assert installed.read_text(encoding='utf-8') == \
+            source.read_text(encoding='utf-8')
+        assert source.exists()  # nunca borrar archivos del usuario
+        from textual.widgets import ListView
+        menu = app.screen.query_one('#themes-list', ListView)
+        assert 'from-disk' in [item.id for item in menu.children]
+
+
+@pytest.mark.asyncio
+async def test_themes_install_local_folder(tmp_path, monkeypatch):
+    """[L] con carpeta: instala el YAML de dentro sin borrar el original."""
+    services = make_services(tmp_path, monkeypatch)
+    folder = tmp_path / 'pack-folder'
+    folder.mkdir()
+    import yaml
+    original = folder / 'folder-pack.yml'
+    original.write_text(yaml.safe_dump({
+        'name': 'folder-pack', 'dark': True,
+        'palette': {'background': '#010101'},
+    }), encoding='utf-8')
+    (folder / 'notas.txt').write_text('no soy un pack', encoding='utf-8')
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press('4')
+        await pilot.pause()
+        from tui_manager.ui.screens import InputScreen
+        app.screen.action_install_local()
+        await pilot.pause()
+        assert isinstance(app.screen, InputScreen)
+        app.screen.query_one('#modal-input').value = str(folder)
+        await pilot.press('enter')
+        await _wait_workers(app, pilot)
+
+        installed = (tmp_path / '.config' / 'tui-manager' / 'themes'
+                     / 'folder-pack.yml')
+        assert installed.exists()
+        assert original.exists()
+        from textual.widgets import ListView
+        menu = app.screen.query_one('#themes-list', ListView)
+        assert 'folder-pack' in [item.id for item in menu.children]
+
+
+@pytest.mark.asyncio
+async def test_themes_install_local_missing_path_warns(tmp_path, monkeypatch):
+    """Ruta inexistente: aviso de advertencia, sin traceback ni copia."""
+    from tui_manager.i18n import t
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    notified = []
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press('4')
+        await pilot.pause()
+        original_notify = app.notify
+
+        def spy(message, *args, **kwargs):
+            notified.append((str(message), kwargs.get('severity')))
+            return original_notify(message, *args, **kwargs)
+
+        app.notify = spy
+        from tui_manager.ui.screens import InputScreen, ThemesScreen
+        assert isinstance(app.screen, ThemesScreen)
+        app.screen.action_install_local()
+        await pilot.pause()
+        assert isinstance(app.screen, InputScreen)
+        missing = str(tmp_path / 'no-existe' / 'pack.yaml')
+        app.screen.query_one('#modal-input').value = missing
+        await pilot.press('enter')
+        await _wait_workers(app, pilot)
+
+        assert isinstance(app.screen, ThemesScreen)
+        assert (t('themes.install_local_not_found', path=missing),
+                'warning') in notified
+        assert not any(sev == 'error' for _, sev in notified)
+        assert not (tmp_path / '.config' / 'tui-manager' / 'themes'
+                    / 'pack.yaml').exists()
+
+
+def test_themes_new_shortcuts_and_i18n_keys():
+    """R/L enlazados, r intacto y claves i18n dentro de ambos dicts."""
+    from tui_manager.i18n import STRINGS, t
+    from tui_manager.ui.screens import ThemesScreen
+    bindings = _binding_map(ThemesScreen)
+    assert bindings['R'] == 'wallpaper_random'
+    assert bindings['L'] == 'install_local'
+    assert bindings['r'] == 'reload'
+    assert callable(ThemesScreen.action_wallpaper_random)
+    assert callable(ThemesScreen.action_install_local)
+    keys = ('themes.wallpaper_random', 'themes.install_local',
+            'themes.install_local_not_found', 'themes.install_local_not_yaml')
+    for lang, strings in STRINGS.items():
+        for key in keys:
+            assert key in strings, f'{key} falta en {lang}'
+    for key in keys:
+        assert t(key, path='/tmp/x') != key
 
 
 @pytest.mark.asyncio
@@ -962,7 +1168,11 @@ def test_no_sync_handler_calls_subprocess_run(tmp_path, monkeypatch):
                 if required:
                     continue  # p. ej. action_quick(entry_id)
                 try:
-                    method()
+                    result = method()
+                    # Las actions async se ejecutan en el loop de Textual;
+                    # aquí solo se comprueba que no llaman a subprocess.run.
+                    if inspect.iscoroutine(result):
+                        result.close()
                 except Exception:
                     pass  # pantalla sin montar: no hay app ni widgets
         assert mocked_run.call_count == 0, (
@@ -1436,4 +1646,234 @@ async def test_help_button_opens_contextual_help(tmp_path, monkeypatch,
         await pilot.pause()
         assert isinstance(app.screen, HelpScreen)
         assert app.screen.context == expected_context
+
+
+# ------------------------------- Snapshots (core/snapshots.py en la TUI) ----
+
+def _snapshots_screen_names(screen):
+    from textual.widgets import Static
+    return [item.query_one(Static).content
+            for item in screen.query('#snapshots-list ListItem')]
+
+
+@pytest.mark.asyncio
+async def test_settings_opens_snapshots_modal(tmp_path, monkeypatch):
+    """El botón de Ajustes abre el modal con el almacén inyectado en tmp_path."""
+    from textual.widgets import Button, LoadingIndicator, Static
+    from tui_manager.i18n import t
+    from tui_manager.ui.screens import SettingsScreen, SnapshotsScreen
+
+    services = make_services(tmp_path, monkeypatch)
+    services.snapshots_base_dir = tmp_path / 'snaps'
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        app.push_screen(SettingsScreen(services))
+        await pilot.pause()
+        button = app.screen.query_one('#settings-snapshots', Button)
+        assert 'button-compact' in button.classes
+        button.press()  # clic equivalente a la tecla «s»
+        await pilot.pause()
+        assert isinstance(app.screen, SnapshotsScreen)
+        await _wait_workers(app, pilot)
+        assert app.screen.base_dir == services.snapshots_base_dir
+        status = app.screen.query_one('#snapshots-status', Static).content
+        assert t('snapshots.empty') in status
+        loading = app.screen.query_one('#snapshots-loading', LoadingIndicator)
+        assert loading.display is False
+        assert t('snapshots.create') in str(
+            app.screen.query_one('#snapshots-create', Button).label)
+
+
+def test_settings_snapshots_shortcut_is_bound():
+    """«s» en Ajustes dispara la acción snapshots (sin tocar el menú)."""
+    from tui_manager.ui.screens import MainMenuScreen, SettingsScreen
+
+    assert _binding_map(SettingsScreen).get('s') == 'snapshots'
+    assert callable(SettingsScreen.action_snapshots)
+    # El menú sigue teniendo 10 entradas y sus atajos [1]–[9]/[0].
+    assert len(MainMenuScreen.ENTRIES) == 10
+    assert [MainMenuScreen.shortcut(i) for i in range(10)] == [
+        str(i + 1) for i in range(9)] + ['0']
+
+
+@pytest.mark.asyncio
+async def test_snapshots_modal_lists_existing(tmp_path, monkeypatch):
+    """El modal lista los snapshots del almacén (leído en worker)."""
+    from textual.widgets import LoadingIndicator, Static
+    from tui_manager.core.snapshots import snapshot_config
+    from tui_manager.i18n import t
+    from tui_manager.ui.screens import SnapshotsScreen
+
+    store = tmp_path / 'snaps'
+    cfg = tmp_path / 'wm.conf'
+    cfg.write_text('original', encoding='utf-8')
+    snapshot_config('bar', [cfg], base_dir=store)
+    snapshot_config('foo', [cfg], base_dir=store)
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        app.push_screen(SnapshotsScreen(base_dir=store))
+        await pilot.pause()
+        await _wait_workers(app, pilot)
+        screen = app.screen
+        assert _snapshots_screen_names(screen) == ['bar', 'foo']
+        status = screen.query_one('#snapshots-status', Static).content
+        assert t('snapshots.count').format(n=2) in status
+        assert t('snapshots.empty') not in status
+        assert screen.query_one('#snapshots-loading',
+                                LoadingIndicator).display is False
+
+
+@pytest.mark.asyncio
+async def test_snapshots_create_flow(tmp_path, monkeypatch):
+    """Crear pide nombre y rutas con InputScreen y llama a snapshot_config."""
+    from textual.widgets import Input, Static
+    from tui_manager.i18n import t
+    from tui_manager.ui.screens import InputScreen, SnapshotsScreen
+
+    store = tmp_path / 'snaps'
+    cfg = tmp_path / 'bar.conf'
+    cfg.write_text('contenido', encoding='utf-8')
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        app.push_screen(SnapshotsScreen(base_dir=store))
+        await pilot.pause()
+        await _wait_workers(app, pilot)
+        await pilot.press('n')
+        await pilot.pause()
+        assert isinstance(app.screen, InputScreen)
+        app.screen.query_one('#modal-input', Input).value = 'perfil'
+        await pilot.press('enter')
+        await pilot.pause()
+        assert isinstance(app.screen, InputScreen)
+        app.screen.query_one('#modal-input', Input).value = str(cfg)
+        await pilot.press('enter')
+        await _wait_workers(app, pilot)
+        assert isinstance(app.screen, SnapshotsScreen)
+        assert (store / 'perfil' / 'snapshot.json').is_file()
+        assert 'perfil' in _snapshots_screen_names(app.screen)
+        status = app.screen.query_one('#snapshots-status', Static).content
+        assert t('snapshots.count').format(n=1) in status
+        # El sidecar .bak-tm se crea junto al original, nunca en el sistema.
+        assert (tmp_path / 'bar.conf.bak-tm').is_file()
+
+
+@pytest.mark.asyncio
+async def test_snapshots_restore_flow(tmp_path, monkeypatch):
+    """Restaurar confirma y devuelve el archivo al contenido del snapshot."""
+    from tui_manager.core.snapshots import snapshot_config
+    from tui_manager.ui.screens import ConfirmScreen, SnapshotsScreen
+
+    store = tmp_path / 'snaps'
+    cfg = tmp_path / 'wm.conf'
+    cfg.write_text('original', encoding='utf-8')
+    snapshot_config('bar', [cfg], base_dir=store)
+    cfg.write_text('modificado', encoding='utf-8')
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        app.push_screen(SnapshotsScreen(base_dir=store))
+        await pilot.pause()
+        await _wait_workers(app, pilot)
+        assert app.screen.query_one('#snapshots-list').index == 0
+        await pilot.press('r')
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmScreen)
+        await pilot.press('y')
+        await _wait_workers(app, pilot)
+        assert isinstance(app.screen, SnapshotsScreen)
+        assert cfg.read_text(encoding='utf-8') == 'original'
+        # El sidecar original no se toca nunca.
+        assert (tmp_path / 'wm.conf.bak-tm').read_text(
+            encoding='utf-8') == 'original'
+
+
+@pytest.mark.asyncio
+async def test_snapshots_unsafe_path_is_actionable(tmp_path, monkeypatch):
+    """Una ruta btrfs/zfs se rechaza con mensaje, sin traceback ni copia."""
+    from textual.widgets import Input, Static
+    from tui_manager.i18n import t
+    from tui_manager.ui.screens import InputScreen, SnapshotsScreen
+
+    store = tmp_path / 'snaps'
+    unsafe = tmp_path / '.snapshots' / 'cfg'
+    unsafe.parent.mkdir()
+    unsafe.write_text('x', encoding='utf-8')
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        app.push_screen(SnapshotsScreen(base_dir=store))
+        await pilot.pause()
+        await _wait_workers(app, pilot)
+        await pilot.press('n')
+        await pilot.pause()
+        app.screen.query_one('#modal-input', Input).value = 'sys'
+        await pilot.press('enter')
+        await pilot.pause()
+        app.screen.query_one('#modal-input', Input).value = str(unsafe)
+        await pilot.press('enter')
+        await _wait_workers(app, pilot)
+        assert isinstance(app.screen, SnapshotsScreen)
+        status = app.screen.query_one('#snapshots-status', Static).content
+        assert t('snapshots.unsafe_path') in status
+        assert 'Traceback' not in status
+        assert not (store / 'sys').exists()
+
+
+@pytest.mark.asyncio
+async def test_snapshots_restore_missing_copy_is_actionable(tmp_path, monkeypatch):
+    """Si falta una copia, el error se explica; no se muestra un traceback."""
+    from textual.widgets import Static
+    from tui_manager.core.snapshots import snapshot_config
+    from tui_manager.i18n import t
+    from tui_manager.ui.screens import ConfirmScreen, SnapshotsScreen
+
+    store = tmp_path / 'snaps'
+    cfg = tmp_path / 'wm.conf'
+    cfg.write_text('original', encoding='utf-8')
+    snapshot_config('bar', [cfg], base_dir=store)
+    for item in (store / 'bar').iterdir():
+        if item.name != 'snapshot.json':
+            item.unlink()
+
+    services = make_services(tmp_path, monkeypatch)
+    app = TuiManagerApp(services)
+    async with app.run_test() as pilot:
+        app.push_screen(SnapshotsScreen(base_dir=store))
+        await pilot.pause()
+        await _wait_workers(app, pilot)
+        await pilot.press('r')
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmScreen)
+        await pilot.press('y')
+        await _wait_workers(app, pilot)
+        status = app.screen.query_one('#snapshots-status', Static).content
+        assert t('snapshots.not_found') in status
+        assert 'Traceback' not in status
+
+
+def test_snapshots_i18n_keys_in_both_languages():
+    """Todas las claves nuevas están dentro de los dicts es y en."""
+    from tui_manager.i18n import STRINGS, t
+
+    keys = (
+        'snapshots.open', 'snapshots.title', 'snapshots.settings_help',
+        'snapshots.hint', 'snapshots.empty', 'snapshots.count',
+        'snapshots.create', 'snapshots.restore', 'snapshots.keys',
+        'snapshots.name_prompt', 'snapshots.paths_prompt',
+        'snapshots.restore_confirm', 'snapshots.select_one',
+        'snapshots.no_paths', 'snapshots.created', 'snapshots.restored',
+        'snapshots.unsafe_path', 'snapshots.not_found',
+        'snapshots.invalid_name', 'snapshots.file_missing',
+        'snapshots.io_error',
+    )
+    for lang, strings in STRINGS.items():
+        for key in keys:
+            assert key in strings, f'{key} falta en {lang}'
+    for key in keys:
+        assert t(key) != key, f't() devolvió la clave {key}'
 

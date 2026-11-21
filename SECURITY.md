@@ -17,17 +17,20 @@ Repositorio oficial: [carlosyoan99/tui-manager](https://github.com/carlosyoan99/
 ## Cómo reportar una vulnerabilidad
 
 **No abras un issue público** ni comentes el problema en discusiones, PRs o
-redes sociales hasta que exista una corrección. Elige una de estas dos vías:
+redes sociales hasta que exista una corrección. **GitHub es el único canal
+oficial** para reportes de seguridad: abre un **GitHub Security Advisory
+(privado)** en
+https://github.com/carlosyoan99/tui-manager/security/advisories/new
+(también disponible en la pestaña *Security* → *Report a vulnerability*).
+El borrador es privado entre tú y el maintainer. No se aceptan reportes por
+correo electrónico.
 
-1. **GitHub Security Advisories (recomendado):** en la pestaña *Security* del
-   repositorio, pulsa *Report a vulnerability*. El borrador es privado entre tú
-   y el maintainer.
-2. **Correo del perfil:** escribe a **carlosyoan99@gmail.com** con el asunto
-   `SECURITY: TUI Manager`. Si usas PGP, puedes pedir la clave pública en el
-   mismo correo.
+Si no estás seguro de que sea una vulnerabilidad, reporta igual por ese mismo
+canal privado: prefiero revisar un falso positivo a perder un aviso real.
 
-Si no estás seguro de que sea una vulnerabilidad, reporta igual: prefiero
-revisar un falso positivo a perder un aviso real.
+Para bugs y preguntas que **no** sean de seguridad, usa
+[GitHub Issues](https://github.com/carlosyoan99/tui-manager/issues) o
+[GitHub Discussions](https://github.com/carlosyoan99/tui-manager/discussions).
 
 ## Qué incluir en el informe
 

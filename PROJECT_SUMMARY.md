@@ -266,7 +266,7 @@ Las contribuciones son bienvenidas. Por favor:
 
 - Documentación: [docs/](docs/)
 - GitHub Issues: [https://github.com/tu-usuario/TUI-Manager/issues](https://github.com/tu-usuario/TUI-Manager/issues)
-- Email: tu-email@ejemplo.com
+- Contacto: GitHub Issues — https://github.com/carlosyoan99/tui-manager/issues
 
 ## ✨ Conclusión
 

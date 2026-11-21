@@ -50,7 +50,7 @@ issues y pull requests, y cualquier comunicación en nombre del proyecto.
 ## Aplicación
 
 Las instancias de comportamiento abusivo, acosador o inaceptable se pueden
-reportar por correo a **carlosyoan99@gmail.com** (o de forma privada desde el
+reportar de forma privada desde GitHub (o desde el
 perfil de GitHub). Todos los reportes se revisarán y investigarán de forma
 rápida y justa, respetando la privacidad y la seguridad de quien reporta. El
 maintainer está obligado a mantener la confidencialidad sobre la identidad de

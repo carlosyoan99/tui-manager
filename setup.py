@@ -12,7 +12,10 @@ from pathlib import Path
 # desde otro directorio, p. ej. al generar .deb/.rpm/PKGBUILD).
 def read_requirements():
     requirements = []
-    with (Path(__file__).parent / 'requirements.txt').open() as f:
+    req = Path(__file__).parent / 'requirements.txt'
+    if not req.exists():  # dentro del sdist
+        req = Path('requirements.txt')
+    with req.open() as f:
         in_dev = False
         for line in f:
             line = line.strip()
@@ -34,10 +37,10 @@ def read_readme():
 setup(
     name='tui-manager',
     version='2.0.0',
-    description='Panel de control portable para la terminal: paquetes, procesos, sistema y temas (Linux, BSD, Termux)',
+    description='Panel de control portable en terminal: paquetes, procesos, sistema y temas (Linux, BSD, macOS, Windows, Termux)',
     author='Carlos Yoan',
-    author_email='carlosyoan@local',
-    url='https://github.com/carlosyoan/TUI-Manager',
+    author_email='carlosyoan99@users.noreply.github.com',
+    url='https://github.com/carlosyoan99/tui-manager',
     license='MIT',
 
     packages=find_packages(exclude=['tests', 'docs', 'config', 'venv']),
@@ -53,7 +56,7 @@ setup(
     },
 
     classifiers=[
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: MIT License',

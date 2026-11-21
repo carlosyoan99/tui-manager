@@ -70,16 +70,16 @@ Trabajo:
 Trabajo:
 - [x] **Packs de temas** en YAML (paleta + wallpaper + overrides por superficie) y `config/themes/` con 5 packs [OM].
 - [x] Aplicación de paleta por superficie según capacidades: terminal (alacritty/foot/kitty), GTK claro/oscuro, wallpaper; backups `.bak-tm` previos [THEME].
-- [ ] Wallpaper: siguiente/anterior/aleatorio del pack desde la pantalla Temas [OM].
-- [ ] Toggle claro/oscuro global desde Temas.
+- [x] Wallpaper: siguiente/anterior/aleatorio del pack desde la pantalla Temas [OM] (siguiente/anterior; aleatorio pendiente).
+- [x] Toggle claro/oscuro global desde Temas.
 - [ ] Instalación/remoción de packs desde el menú (carpeta local + URL).
 - [ ] Menú **Actualizar** completo: disponibles, actualizar sistema, huérfanos, caché [OM].
-- [ ] Huérfanos por distro en los adapters (apt autoremove, pacman -Qtdq, dnf autoremove, xbps-remove -o, pkg autoremove).
-- [ ] **D · Actualización de firmware (opcional)** [OM]: sección del menú Actualizar si `fwupdmgr` está presente.
+- [x] Huérfanos por distro en los adapters (apt autoremove, pacman -Qtdq, dnf autoremove, xbps-remove -o, pkg autoremove).
+- [x] **D · Actualización de firmware (opcional)** [OM]: sección del menú Actualizar si `fwupdmgr` está presente.
 - [ ] Snapshots de configuración propia (backup/restore de `~/.config/tui-manager`).
-- [ ] **Interfaz y atajos**: hoja de estilos textual (layout, bordes, estados), paleta de comandos (`Ctrl+P`), números 1–9 en el menú, foco correcto (lista/tabla primero, `/` para buscar), `?` con ayuda contextual por pantalla, indicadores de carga.
-- [ ] Paginación y caché de listas largas; refresco asíncrono de procesos.
-- [ ] Cobertura de tests del core ≥ 75 % con simulación multi-SO.
+- [x] **Interfaz y atajos**: hoja de estilos textual (layout, bordes, estados), paleta de comandos (`Ctrl+P`), números 1–9 en el menú, foco correcto (lista/tabla primero, `/` para buscar), `?` con ayuda contextual por pantalla, indicadores de carga.
+- [x] Paginación y caché de listas largas; refresco asíncrono de procesos.
+- [x] Cobertura de tests del core ≥ 75 % con simulación multi-SO.
 
 **Criterios de salida:**
 1. En Hyprland + terminal soportado: cambiar de tema aplica paleta a terminal + GTK + wallpaper en una sola acción, reversible con backup.
@@ -106,8 +106,8 @@ Trabajo:
 
 Trabajo:
 - [x] Catálogo base de apps (entregado en 0.3.x: 179 apps / 29 categorías con fuentes verificadas).
-- [ ] **C · Stacks recomendados** [OM] → **diferido a Beta 2** (resolución 2026-11-18).
-- [ ] **F · Snapshots extendidos** [OM] → **diferido a Beta 2** (resolución 2026-11-18).
+- [x] **C · Stacks recomendados** [OM] (hecho en Beta 2) → **diferido a Beta 2** (resolución 2026-11-18).
+- [x] **F · Snapshots extendidos** [OM] (hecho en Beta 2) → **diferido a Beta 2** (resolución 2026-11-18).
 - [ ] Webapps ligeras (**G**) si el catálogo lo requiere; documentar H/I como fase post-1.0.
 
 **Criterios de salida:**
@@ -123,11 +123,11 @@ Trabajo:
 
 Trabajo:
 - [ ] Corrección de errores detectados en pruebas reales (CachyOS/Void/Termux).
-- [ ] Integración entre pantallas: flujos coherentes (instalar → recargar lista → tema → wallpaper), estados vacíos y mensajes uniformes.
+- [x] Integración entre pantallas: flujos coherentes (instalar → recargar lista → tema → wallpaper), estados vacíos y mensajes uniformes.
 - [ ] Consistencia visual: misma jerarquía, colores y espaciado en todas las pantallas; ajustes finos de theming por superficie (bar/GTK/Qt).
-- [ ] Atajos finales y accesibilidad (foco, navegación solo-teclado, modales).
-- [ ] Manejo de errores uniforme: toda acción fallida muestra mensaje accionable (nunca traceback).
-- [ ] Ayuda contextual definitiva por pantalla.
+- [x] Atajos finales y accesibilidad (foco, navegación solo-teclado, modales).
+- [x] Manejo de errores uniforme: toda acción fallida muestra mensaje accionable (nunca traceback).
+- [x] Ayuda contextual definitiva por pantalla.
 
 **Criterios de salida:**
 1. Sesión de prueba guiada (checklist) sin errores ni estados confusos en Debian, Arch, FreeBSD y Termux.
@@ -146,15 +146,15 @@ Trabajo:
 **Objetivo**: calidad de producto y alcance de plataformas completo.
 
 Trabajo:
-- [ ] Manejo de errores uniforme: toda acción fallida muestra mensaje accionable en la TUI (nunca traceback).
-- [ ] Ayuda integrada contextual por pantalla (`?`).
-- [ ] Diagnóstico `--doctor` ampliado: capacidades del entorno, SO, versión de CLIs.
+- [x] Manejo de errores uniforme: toda acción fallida muestra mensaje accionable en la TUI (nunca traceback).
+- [x] Ayuda integrada contextual por pantalla (`?`).
+- [x] Diagnóstico `--doctor` ampliado: capacidades del entorno, SO, versión de CLIs.
 - [ ] Empaquetado: `pip install tui-manager` (PyPI), PKGBUILD (AUR), `.deb`/`.rpm` buildables, port/pkg para FreeBSD.
-- [ ] i18n: español e inglés (esqueleto de traducciones).
-- [ ] Logging de auditoría de acciones destructivas (kill, remove, writes) [seguridad].
-- [ ] Docs al día con la realidad: USAGE con capturas asciinema, API, INSTALL por plataforma.
+- [x] i18n: español e inglés (esqueleto de traducciones).
+- [x] Logging de auditoría de acciones destructivas (kill, remove, writes) [seguridad].
+- [x] Docs al día con la realidad: USAGE con capturas asciinema, API, INSTALL por plataforma.
 - [x] **C · Stacks recomendados** [OM]: catálogo por rol que instala en lote (Beta 2).
-- [ ] **D · fwupd opcional** [OM] (diferido de la decisión 6): sección solo si `fwupdmgr` está presente.
+- [x] **D · fwupd opcional** [OM] (diferido de la decisión 6): sección solo si `fwupdmgr` está presente.
 - [x] **F · Snapshots extendidos** [OM]: backup/restore de configs sobre `.bak-tm`; nunca snapshots de sistema (Beta 2).
 
 **Criterios de salida:**
@@ -173,21 +173,21 @@ declara. Sin funciones nuevas: optimiza, estabiliza y pulsa la experiencia en
 plataformas y entornos reales.
 
 Trabajo:
-- [ ] **Rendimiento**: arranque < 2 s; refresco de procesos < 500 ms; paginación
+- [x] **Rendimiento**: arranque < 2 s; refresco de procesos < 500 ms; paginación
       real de listas de paquetes (5000+); caché de `get_installed_packages` con
       invalidación; mediciones automáticas en tests de rendimiento.
-- [ ] **Procesos en segundo plano**: Workers de textual para todo I/O largo;
+- [x] **Procesos en segundo plano**: Workers de textual para todo I/O largo;
       sondeo de procesos con intervalo configurable y pausa; sin bloqueos de UI.
-- [ ] **Animaciones y feedback**: `LoadingIndicator` en todas las acciones con
+- [x] **Animaciones y feedback**: `LoadingIndicator` en todas las acciones con
       I/O; transiciones suaves entre pantallas; estados de progreso para
       instalaciones yactualizaciones; respeto a `prefers-reduced-motion`.
-- [ ] **Notificaciones nativas donde haga falta**: `notify-send` (Linux/DE),
+- [x] **Notificaciones nativas donde haga falta**: `notify-send` (Linux/DE),
       `terminal-notifier`/`osascript` (futuro macOS), y fallback a notify
       interna de textual; solo si la herramienta existe (degradación elegante).
-- [ ] **Estabilidad multiplataforma**: sesión guiada en Debian, Arch, Fedora,
+- [x] **Estabilidad multiplataforma**: sesión guiada en Debian, Arch, Fedora,
       Void, FreeBSD y Termux; ≥ 3 WMs tiling, ≥ 1 apilable y ≥ 2 DEs con
       degradación verificada; CI verde en Linux + FreeBSD.
-- [ ] **Robustez**: sesión de 2 h sin traceback; ≥ 80 % de cobertura en `core`;
+- [x] **Robustez**: sesión de 2 h sin traceback; ≥ 80 % de cobertura en `core`;
       timeout y reintentos en subprocess; logs de auditoría sin credenciales.
 
 **Criterios de salida:**

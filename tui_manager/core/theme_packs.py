@@ -87,6 +87,33 @@ def get_pack(name: str) -> Optional[ThemePack]:
     return None
 
 
+def install_pack_from_path(path: str) -> Optional[ThemePack]:
+    """Copia un pack YAML local al directorio de usuario y lo carga.
+
+    Acepta un archivo ``.yaml``/``.yml`` o una carpeta que contenga uno.
+    Nunca elimina archivos del usuario: solo copia (``copy2``) el YAML de
+    origen al directorio de packs y carga el resultado.
+    """
+    try:
+        if os.path.isdir(path):
+            yamls = sorted(f for f in os.listdir(path)
+                           if f.lower().endswith(('.yaml', '.yml')))
+            if not yamls:
+                logger.warning(f"install_pack_from_path: sin YAML en {path}")
+                return None
+            path = os.path.join(path, yamls[0])
+        os.makedirs(user_themes_dir(), exist_ok=True)
+        dest = os.path.join(user_themes_dir(), os.path.basename(path))
+        if not dest.endswith(('.yaml', '.yml')):
+            dest += '.yaml'
+        if os.path.abspath(path) != os.path.abspath(dest):
+            shutil.copy2(path, dest)
+        return ThemePack.from_file(dest)
+    except Exception as e:
+        logger.error(f"install_pack_from_path: {e}")
+        return None
+
+
 def install_pack_from_url(url: str) -> Optional[ThemePack]:
     """Descarga un pack YAML y lo instala en el directorio de usuario."""
     try:
@@ -95,8 +122,8 @@ def install_pack_from_url(url: str) -> Optional[ThemePack]:
         if not dest.endswith(('.yaml', '.yml')):
             dest += '.yaml'
         urllib.request.urlretrieve(url, dest)
-        pack = ThemePack.from_file(dest)
-        return pack
+        # reutiliza la carga/validación del helper (path == dest → sin copia)
+        return install_pack_from_path(dest)
     except Exception as e:
         logger.error(f"install_pack_from_url: {e}")
         return None

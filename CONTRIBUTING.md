@@ -5,9 +5,13 @@ preparar el entorno, cómo se organiza el proyecto y qué se espera de una
 contribución. El repositorio oficial es
 [carlosyoan99/tui-manager](https://github.com/carlosyoan99/tui-manager).
 
-Al participar aceptas el [Código de Conducta](CODE_OF_CONDUCT.md). Si vas a
-informar de un problema de seguridad, sigue [SECURITY.md](SECURITY.md) en vez
-de abrir un issue público.
+Al participar aceptas el [Código de Conducta](CODE_OF_CONDUCT.md). **GitHub es
+el único canal oficial** del proyecto: usa
+[GitHub Issues / Discussions](https://github.com/carlosyoan99/tui-manager/issues)
+para bugs y preguntas. Para problemas de seguridad, abre un
+[GitHub Security Advisory (privado)](https://github.com/carlosyoan99/tui-manager/security/advisories/new)
+y sigue [SECURITY.md](SECURITY.md) en vez de abrir un issue público. No se
+aceptan reportes por correo electrónico.
 
 ## Preparar el entorno
 
@@ -106,8 +110,9 @@ Abre un issue en
 - Si es posible, captura o grabación corta; la guía
   [demo](docs/DEMO.md) explica cómo grabar una sin ejecutar acciones reales.
 
-Para vulnerabilidades de seguridad, **no** uses issues públicos: consulta
-[SECURITY.md](SECURITY.md).
+Para vulnerabilidades de seguridad, **no** uses issues públicos: abre un
+[GitHub Security Advisory (privado)](https://github.com/carlosyoan99/tui-manager/security/advisories/new)
+y consulta [SECURITY.md](SECURITY.md). GitHub es el único canal de contacto.
 
 ## Licencia
 
