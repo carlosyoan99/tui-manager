@@ -1,6 +1,6 @@
 # PLAN — Betas previas a 2.0
 
-> **Estado:** Beta A completada · Betas B y C en curso · **Objetivo:** validar en campo antes del release 2.0 (macOS/Windows).
+> **Estado:** las 3 betas completadas · **2.0.0 publicada** · Objetivo cumplido: validar en campo antes del release (macOS/Windows).
 > **Regla del usuario:** no se declara 2.0 sin pasar por betas de prueba.
 > **Origen:** peticiones 2026-11/20 (mouse/táctil en modales, sudo con contraseña) + ROADMAP 2.0.
 
@@ -11,11 +11,11 @@
 | Beta | Versión | Contenido | Plataformas de prueba | Estado |
 |---|---|---|---|---|
 | **Beta A** | `2.0.0-beta.1` | Accesibilidad mouse/táctil + elevación sudo correcta | 4 hosts (3 laptops + Termux) | ✅ **completada** |
-| **Beta B** | `2.0.0-beta.2` | macOS (Homebrew/defaults/osascript) simulado + Windows (winget/scoop/tasklist) simulado | tests multi-SO simulados | 🔄 **en curso** |
-| **Beta C** | `2.0.0-beta.3` | Integración final, docs 2.0, correcciones de campo | 4 hosts + simulación | 🔄 **en curso** |
+| **Beta B** | `2.0.0-beta.2` | macOS (Homebrew/defaults/osascript) simulado + Windows (winget/scoop/tasklist) simulado | tests multi-SO simulados | ✅ completada |
+| **Beta C** | `2.0.0-beta.3` | Integración final, docs 2.0, correcciones de campo | 4 hosts + simulación | ✅ completada |
 | 2.0 final | `2.0.0` | Solo si las 3 betas pasan | — | pendiente |
 
-Las betas B y C están **en curso**: no se documentan sus resultados como terminados. macOS y Windows se validan por simulación; no hay esos SO entre los hosts del usuario.
+Las 3 betas están completadas y 2.0.0 fue publicada. macOS y Windows se validaron por simulación (no hay esos SO entre los hosts del usuario); Linux/BSD/Termux se validaron en los 4 equipos reales.
 
 ---
 
