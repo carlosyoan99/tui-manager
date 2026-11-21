@@ -54,5 +54,9 @@ def fake_runner(monkeypatch):
         return real_which(tool, *a, **k)
     monkeypatch.setattr(shutil, 'which', fake_which)
     import subprocess
+    import os as _os
+    # Forzar usuario no-root: en FreeBSD CI el runner es root y el código
+    # omitiría sudo, haciendo los tests dependientes del host.
+    monkeypatch.setattr(_os, 'geteuid', lambda: 1000)
     monkeypatch.setattr(subprocess, 'run', runner)
     return runner
