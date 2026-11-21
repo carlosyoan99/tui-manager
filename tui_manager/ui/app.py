@@ -144,15 +144,34 @@ class TuiManagerApp(App):
                 severity='warning',
             )
             return False
+        # `suspend()` debe ejecutarse en el hilo principal de textual.
+        # Este hook se invoca desde un worker (execute_command), así que
+        # lo delegamos con call_from_thread y esperamos a que termine.
+        # Bajo SSH esto es crítico: si suspend se llama desde el worker,
+        # no se libera el TTY y sudo no puede pedir la contraseña.
+        import threading
+        done = threading.Event()
+        outcome = {'rc': 1}
+
+        def _run_in_main_thread():
+            try:
+                with self.suspend():
+                    result = subprocess.run([tool, '-v'], check=False)
+                outcome['rc'] = result.returncode
+            except (OSError, subprocess.SubprocessError):
+                logger.debug('elevación cancelada o fallida', exc_info=True)
+            except Exception:
+                logger.debug('elevación no disponible en este entorno', exc_info=True)
+            finally:
+                done.set()
+
         try:
-            with self.suspend():
-                result = subprocess.run([tool, '-v'], check=False)
-            ok = result.returncode == 0
-        except (OSError, subprocess.SubprocessError):
-            logger.debug('elevación cancelada o fallida', exc_info=True)
-            ok = False
+            self.call_from_thread(_run_in_main_thread)
+            # Esperamos a que el usuario escriba la contraseña en el TTY.
+            done.wait(timeout=300)
+            ok = outcome['rc'] == 0
         except Exception:
-            logger.debug('elevación no disponible en este entorno', exc_info=True)
+            logger.debug('no se pudo elevar desde el hilo principal', exc_info=True)
             ok = False
 
         if ok:

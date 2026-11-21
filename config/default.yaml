@@ -1,5 +1,5 @@
 # Configuración por defecto de TUI Manager
-# Copia a ~/.tui-manager/config.yaml y edita lo que quieras.
+# Copia a ~/.config/tui-manager/config.yaml y edita lo que quieras.
 
 theme: dark                # tema interno de la TUI: dark | light | retro
 theme_source: manual       # origen del tema: manual | mutagen (matugen/OpenCode)

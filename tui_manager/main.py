@@ -43,6 +43,30 @@ CLI_VERSION_COMMANDS = (
 )
 
 
+# CLI principal por distro (la que --doctor debe reportar).
+CLI_BY_DISTRO = {
+    'debian': 'apt', 'ubuntu': 'apt', 'linuxmint': 'apt', 'kali': 'apt', 'mx': 'apt',
+    'arch': 'pacman', 'manjaro': 'pacman', 'cachyos': 'pacman',
+    'endeavouros': 'pacman', 'garuda': 'pacman', 'artix': 'pacman',
+    'fedora': 'dnf', 'rhel': 'dnf', 'centos': 'dnf', 'rocky': 'dnf', 'almalinux': 'dnf',
+    'void': 'xbps-query',
+    'gentoo': 'emerge', 'opensuse': 'zypper', 'suse': 'zypper', 'alpine': 'apk',
+    'freebsd': 'pkg', 'dragonfly': 'pkg', 'netbsd': 'pkgin', 'openbsd': 'pkg_add',
+    'termux': 'pkg',
+    'darwin': 'brew', 'macos': 'brew', 'windows': 'winget',
+}
+
+
+def relevant_cli(distribution: str = None) -> str:
+    """Devuelve la única CLI relevante para la distro, o '' si no se conoce."""
+    if distribution is None:
+        try:
+            distribution = DistributionDetector.detect()
+        except Exception:
+            return ''
+    return CLI_BY_DISTRO.get(distribution, '')
+
+
 def configure_non_interactive(manager) -> None:
     """Desactiva el hook de elevación en los adapters de una ruta CLI.
 
@@ -164,7 +188,11 @@ def collect_doctor_data() -> dict:
     # Versiones de CLIs (B2-2): únicamente `<cli> --version`, sin efectos
     # en el sistema. Las ausentes se degradan a «N/D» con estado de aviso.
     cli_versions = {}
-    for cli in CLI_VERSION_COMMANDS:
+    # Solo se reporta la CLI del gestor de esta distro. Mostrar apt/dnf/pkg
+    # en CachyOS solo genera avisos falsos ("instala pacman" cuando ya está).
+    primary_cli = relevant_cli(distro)
+    listed_clis = (primary_cli,) if primary_cli else ()
+    for cli in listed_clis:
         version = _cli_version(cli)
         cli_versions[cli] = version
         add(cli, version, warn=version == 'N/D')
@@ -188,7 +216,7 @@ def collect_doctor_data() -> dict:
     suggestions = []
     if distro is None:
         suggestions.append('doctor.fix.distro')
-    for cli in CLI_VERSION_COMMANDS:
+    for cli in listed_clis:
         if cli_versions.get(cli) == 'N/D':
             suggestions.append('doctor.fix.cli')
             break

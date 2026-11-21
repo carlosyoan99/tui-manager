@@ -243,6 +243,8 @@ def test_app_elevate_suspends_tui_and_uses_real_tty(monkeypatch):
         events.append('suspend-exit')
 
     monkeypatch.setattr(app, 'suspend', fake_suspend)
+    # elevate delega al hilo principal; en el test lo ejecutamos en línea.
+    monkeypatch.setattr(app, 'call_from_thread', lambda fn: fn())
     monkeypatch.setattr(
         app_module.subprocess, 'run',
         lambda cmd, **kwargs: (

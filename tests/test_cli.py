@@ -74,11 +74,10 @@ def test_doctor_reports_cli_versions(monkeypatch):
     monkeypatch.setattr(main_module.shutil, 'which', fake_which)
     report = run_doctor()
 
-    assert sorted(calls) == sorted(
-        (cli, '--version') for cli in CLI_VERSION_COMMANDS)
-    for cli, version in versions.items():
-        assert cli in report
-        assert version in report
+    # Solo se consulta y se muestra la CLI relevante (pacman en CachyOS).
+    assert len(calls) == 1 and calls[0][1] == '--version'
+    assert calls[0][0] in versions
+    assert versions[calls[0][0]] in report
 
 
 def test_doctor_cli_commands_include_macos_and_windows():
@@ -102,13 +101,15 @@ def test_doctor_skips_absent_clis_without_running_them(monkeypatch):
 
     monkeypatch.setattr(main_module.subprocess, 'run', fake_run)
     monkeypatch.setattr(main_module.shutil, 'which', fake_which)
+    # El doctor solo reporta la CLI relevante de la distro detectada.
+    monkeypatch.setattr(main_module.DistributionDetector, 'detect', lambda: 'debian')
     report = run_doctor()
 
-    assert sorted(calls) == sorted((cli, '--version') for cli in present)
-    for cli in CLI_VERSION_COMMANDS:
-        if cli not in present:
-            assert any(line.strip().startswith(cli) and 'N/D' in line
-                       for line in report.splitlines()), cli
+    # Solo se consulta la CLI relevante (apt), no todas las del catálogo.
+    assert ('apt', '--version') in calls
+    assert all(c[0] in ('apt',) for c in calls), calls
+    assert any(line.strip().startswith('apt') and 'OK' in line
+               for line in report.splitlines())
 
 
 @pytest.mark.parametrize('cli', CLI_VERSION_COMMANDS)

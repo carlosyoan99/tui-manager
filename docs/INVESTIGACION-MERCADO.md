@@ -36,7 +36,7 @@ Hay un ángulo claro y defendible: **"panel de control portable estilo Omarchy e
 |---|---|
 | Navegación solo teclado ya funciona, pero no se anuncia | Añadir badge "keyboard-first" y tabla de atajos en el README (ya existe en USAGE). |
 | Catalógo de 179 apps es bueno pero estático | Añadir `tm update-catalog` que refresque URLs verificadas (scripts con curl, con permiso). |
-| Ausencia de perfiles de configuración | Perfiles `~/.tui-manager/profiles/*.yaml` (`minimal`, `dev`, `streaming`) con un `Select` en Ajustes. |
+| Ausencia de perfiles de configuración | Perfiles `~/.config/tui-manager/profiles/*.yaml` (`minimal`, `dev`, `streaming`) con un `Select` en Ajustes. |
 | Sin feedback de "qué hace este comando" | Cada confirmación debería mostrar el comando exacto a ejecutar (auditabilidad + confianza). |
 | Idiomas solo es/en | Ya es suficiente para empezar; no ampliar hasta que haya demanda. |
 
@@ -45,7 +45,7 @@ Hay un ángulo claro y defendible: **"panel de control portable estilo Omarchy e
 Patrones observables en btop, lazygit, yazi, fastfetch:
 1. **Arranque inmediato y salida limpia** — ya medimos 160–186 ms.
 2. **Una sola cerveza, bien hecha** — btop es monitor, lazygit es git. TUI Manager es más amplio; el riesgo es parecer difuso. Mitigación: el menú jerárquico y el `tm --doctor` como entrada.
-3. **Config como código** — archivo YAML legible y versionable. Ya existe `~/.tui-manager/config.yaml`.
+3. **Config como código** — archivo YAML legible y versionable. Ya existe `~/.config/tui-manager/config.yaml`.
 4. **Temas y personalización** — el punto 5 del usuario (theme mutagen) va justo aquí.
 5. **Salida de datos** — `btop` tiene export; nosotros deberíamos tener `--json`.
 6. **Comunidad** — CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, plantillas de issues. Hoy no existen; son baratos y aumentan confianza.

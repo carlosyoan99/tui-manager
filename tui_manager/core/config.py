@@ -6,6 +6,8 @@ import os
 import yaml
 import logging
 
+from .paths import config_file as _default_config_file
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,7 +42,7 @@ class Config:
         Args:
             config_file: Ruta del archivo de configuración
         """
-        self.config_file = config_file or os.path.expanduser('~/.tui-manager/config.yaml')
+        self.config_file = config_file or str(_default_config_file())
         self.config = self._load_config()
 
     def _load_config(self) -> dict:

@@ -277,3 +277,19 @@ sigue siendo tema de Noctalia; el Select de la TUI solo afecta a textual.
 **Observación:** no se incluyen resultados de macOS/Windows: la Beta B está en curso y esos SO se validan por simulación (no hay macOS ni Windows entre los hosts del usuario). El CHANGELOG lo gestiona el usuario.
 
 > ## ✅ BETA A — ACEPTAR (notebook, laptop y void; móvil pendiente de verificación)
+
+---
+
+# QA-REPORT — 2.0.0 (release final)
+
+**Fecha:** 2026-11-21 · **Suite:** 469 tests verdes.
+
+| Verificación | Resultado |
+|---|---|
+| 4 hosts (Notebook, Laptop, Void, Termux) | ✅ 469 tests en cada uno |
+| CI GitHub (Linux 3.10–3.13 + FreeBSD 13.4/14.2) | ✅ success |
+| macOS/Windows | ✅ simulados (sin SO real entre los hosts) |
+| `tm` en los 4 hosts | ✅ 2.0.0 |
+| XDG + sudo SSH + doctor CLI relevante | ✅ corregidos y testeados |
+
+> ## ✅ 2.0.0 ESTABLE — ACEPTAR

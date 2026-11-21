@@ -2,7 +2,7 @@
 TUI Manager - Panel de control portable para la terminal (Linux, BSD, Termux)
 """
 
-__version__ = '1.2.0'
+__version__ = '2.0.0'
 __author__ = 'Carlos Yoan'
 __license__ = 'MIT'
 __description__ = 'Panel de control portable: paquetes, procesos, sistema y temas (Linux, BSD, Termux)'

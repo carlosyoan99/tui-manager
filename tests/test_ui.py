@@ -504,9 +504,11 @@ async def test_about_screen_fill(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_logs_screen_shows_tail(tmp_path, monkeypatch):
     services = make_services(tmp_path, monkeypatch)  # HOME → tmp_path
-    log_dir = tmp_path / '.tui-manager' / 'logs'
+    log_dir = tmp_path / 'state' / 'tui-manager' / 'logs'
     log_dir.mkdir(parents=True)
     (log_dir / 'app.log').write_text('line1: inicio\nline2: paquetes\n')
+    # LogsScreen usa paths.log_file() → XDG_STATE_HOME
+    monkeypatch.setenv('XDG_STATE_HOME', str(tmp_path / 'state'))
     app = TuiManagerApp(services)
     async with app.run_test() as pilot:
         await pilot.pause()

@@ -7,6 +7,8 @@ import os
 import sys
 from logging.handlers import RotatingFileHandler
 
+from tui_manager.core.paths import log_file as _default_log_file
+
 
 def setup_logger(name: str = 'TUI-Manager', log_file: str = None) -> logging.Logger:
     """
@@ -27,7 +29,7 @@ def setup_logger(name: str = 'TUI-Manager', log_file: str = None) -> logging.Log
 
     # Manejador de archivo con rotación (10 MB máximo, 5 backups)
     if log_file is None:
-        log_file = os.path.expanduser('~/.tui-manager/logs/app.log')
+        log_file = str(_default_log_file())
 
     try:
         os.makedirs(os.path.dirname(log_file), exist_ok=True)

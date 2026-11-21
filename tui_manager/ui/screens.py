@@ -1638,7 +1638,8 @@ class LogsScreen(Screen):
     @work(thread=True, exclusive=True)
     def action_refresh(self) -> None:
         from pathlib import Path
-        path = Path.home() / '.tui-manager' / 'logs' / 'app.log'
+        from tui_manager.core.paths import log_file as _log_path
+        path = _log_path()
         try:
             with open(path, 'r', errors='replace') as f:
                 lines = f.readlines()[-200:]

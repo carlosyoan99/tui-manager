@@ -4,6 +4,32 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ---
 
+## [2.0.0] — 2026-11-21 — multiplataforma completa (macOS/Windows) y experiencia táctil (estable)
+
+### Agregado
+- Adapters de paquetes para macOS (Homebrew) y Windows (winget/scoop/choco).
+- EnvironmentAdapters y SystemControl para Darwin y Windows (wallpaper, modo
+  oscuro, launch-or-focus, energía), con degradación por capacidad.
+- `--doctor` e `info` del sistema con ramas macOS/Windows.
+- Accesibilidad mouse/táctil: botones en modales, clic en «Marcar», Select de
+  orden de procesos, botón `?`.
+- Elevación segura: `sudo -n` con caché y `sudo -v` en el TTY real al suspender
+  la TUI (corregido para SSH delegando `suspend()` al hilo principal).
+- Configuración conforme a XDG: `~/.config/tui-manager/`, logs en
+  `~/.local/state/tui-manager/`, snapshots en `~/.local/share/tui-manager/`,
+  con lectura de la ruta legacy para no perder ajustes.
+
+### Corregido
+- `--doctor` solo reporta la CLI relevante de la distro (ya no avisa de apt/dnf
+  en Arch ni sugiere instalar pacman cuando está instalado).
+
+### Validación
+- **469 tests verdes** en 4 hosts (Notebook, Laptop, Void-Laptop, Termux).
+- CI de GitHub verificada en verde: Linux 3.10–3.13 + FreeBSD 13.4/14.2.
+- macOS y Windows validados por simulación (no hay esos SO entre los hosts).
+
+---
+
 ## [1.2.0] — 2026-11-19 — Onboarding, JSON y comunidad
 
 ### Agregado

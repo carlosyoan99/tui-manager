@@ -644,7 +644,7 @@ Gestor de configuración.
 ```python
 from tui_manager.core.config import Config
 
-config = Config(config_file='~/.tui-manager/config.yaml')
+config = Config(config_file='~/.config/tui-manager/config.yaml')
 ```
 
 #### Métodos

@@ -192,7 +192,7 @@ Puedes forzar una actualización presionando `F5` o `R`.
 
 Si quieres que la TUI siga el esquema generado desde tu wallpaper (el mismo
 que usan OpenCode/Noctalia), activa la fuente `mutagen` en tu
-`~/.tui-manager/config.yaml`:
+`~/.config/tui-manager/config.yaml`:
 
 ```yaml
 theme_source: mutagen
@@ -271,13 +271,13 @@ Presiona `?` en cualquier pantalla para ver la ayuda específica de esa pantalla
 
 - Presiona `R` o `F5` para forzar una actualización
 - Verifica que el comando `ps` funciona en tu terminal
-- Revisa los logs en `~/.tui-manager/logs/`
+- Revisa los logs en `~/.local/state/tui-manager/logs/`
 
 ### La aplicación no se inicia
 
 - Verifica que tienes Python 3.10 o superior instalado
 - Ejecuta `python main.py` en la terminal para ver errores específicos
-- Revisa los logs en `~/.tui-manager/logs/`
+- Revisa los logs en `~/.local/state/tui-manager/logs/`
 
 ## Mensajes de error y ayuda
 
@@ -344,7 +344,7 @@ instaladas en tu sistema.
 
 ### Formato preferido
 En **Ajustes** podés fijar `preferred_install_method` (en
-`~/.tui-manager/config.yaml`) con uno de estos valores:
+`~/.config/tui-manager/config.yaml`) con uno de estos valores:
 
 ```yaml
 preferred_install_method: auto   # auto | repo | github | flatpak | snap | appimage

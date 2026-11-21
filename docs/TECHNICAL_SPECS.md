@@ -647,7 +647,7 @@ class Config:
     }
 
     def __init__(self, config_file: str = None):
-        self.config_file = config_file or os.path.expanduser('~/.tui-manager/config.yaml')
+        self.config_file = config_file or os.path.expanduser('~/.config/tui-manager/config.yaml')
         self.config = self._load_config()
 
     def _load_config(self) -> dict:
@@ -778,7 +778,7 @@ def setup_logger(name: str, log_file: str = None) -> logging.Logger:
     """Configura el logger principal"""
 
     if log_file is None:
-        log_file = os.path.expanduser('~/.tui-manager/logs/app.log')
+        log_file = os.path.expanduser('~/.local/state/tui-manager/logs/app.log')
 
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)

@@ -24,7 +24,8 @@ from typing import Dict, Iterable, List, Union
 PathLike = Union[str, Path]
 
 SNAPSHOT_SUFFIX = '.bak-tm'
-DEFAULT_SNAPSHOT_DIR = Path.home() / '.tui-manager' / 'snapshots'
+from .paths import snapshot_dir as _snapshot_dir
+DEFAULT_SNAPSHOT_DIR = _snapshot_dir()
 _MANIFEST_FILE = 'snapshot.json'
 _VALID_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.-]*$')
 

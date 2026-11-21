@@ -129,10 +129,10 @@ def test_json_doctor_reuses_shared_cli_version_logic(monkeypatch, capsys):
     doc = json.loads(capsys.readouterr().out)
 
     assert set(doc) == STABLE_KEYS
-    assert sorted(calls) == sorted(CLI_VERSION_COMMANDS)  # una sola pasada
+    assert calls == ['apt']  # solo la CLI relevante de la distro (debian)
     reported = {i['key']: i['value'] for i in doc['items']
                 if i['key'] in versions}
-    assert reported == versions
+    assert reported == {'apt': versions['apt']}
     assert all(i['type'] in {'diagnostic', 'suggestion'}
                for i in doc['items'])
     assert any(i['key'] == 'doctor.python' for i in doc['items'])

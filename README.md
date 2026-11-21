@@ -142,7 +142,7 @@ TUI-Manager/
 
 ## Estado
 
-**2.0.0-beta.1** — accesibilidad táctil y sudo seguro (Beta A completada: 399 tests verdes en notebook, laptop y void; móvil en verificación; CI de GitHub verde en Linux 3.10–3.13 y FreeBSD 13.4/14.2). macOS y Windows en progreso en la fase 2.0 (simulación). Base 1.2.0: onboarding (`tm --quickstart`), salida `--json`, comunidad y CI; base 1.0/1.1 verificada en 4 equipos. La TUI con [textual](https://textual.textualize.io/) es funcional: paquetes, procesos, system, temas, actualizaciones, ajustes, ayuda, acerca de y logs, con degradación elegante por capacidades. Núcleo multi-SO (Linux, BSD, Termux) con 399 tests verdes. Ver [`CHANGELOG.md`](CHANGELOG.md) y [`docs/ROADMAP.md`](docs/ROADMAP.md) para el detalle de fases y criterios de salida.
+**2.0.0 Estable** — panel multiplataforma (Linux, BSD, macOS, Windows) con interfaz táctil, sudo seguro y configuración XDG.
 
 ## Licencia
 
