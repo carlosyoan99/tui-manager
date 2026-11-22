@@ -154,7 +154,7 @@ Los nombres de paquetes difieren de Debian (p. ej. `python`, no `python3`).
 ## Instalación desde el código fuente (cualquier plataforma)
 
 ```bash
-git clone https://github.com/carlosyoan/TUI-Manager.git
+git clone https://github.com/carlosyoan99/tui-manager.git
 cd tui-manager
 python3 -m venv .venv
 . .venv/bin/activate          # en Termux: . .venv/bin/activate (con `python`)
