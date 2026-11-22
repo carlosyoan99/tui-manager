@@ -939,8 +939,8 @@ Excepción para errores de temas.
 Los descriptores por plataforma están en [`packaging/`](../packaging/):
 `PKGBUILD` (Arch/AUR), `debian/` (`control` + `rules` + `changelog`),
 `tui-manager.spec` (Fedora/RPM) y `freebsd/` (`Makefile` + `pkg-descr`).
-Todos usan el nombre `tui-manager` y la versión `0.5.0` (release
-`0.5.0-beta.1`). Las dependencias son las de `requirements.txt`: `textual`,
+Todos usan el nombre `tui-manager` y la versión `2.0.1` (release
+`2.0.1`). Las dependencias son las de `requirements.txt`: `textual`,
 `pyyaml` y `python-json-logger`; no se requieren bindings nativos.
 
 Comandos por canal natural (detalle en la [guía de instalación](INSTALL.md)):
@@ -955,6 +955,6 @@ Comandos por canal natural (detalle en la [guía de instalación](INSTALL.md)):
 | Termux | PyPI en el prefix | `python -m pip install tui-manager` |
 
 En esta entrega no se ejecutaron builds: los descriptores son plantillas que
-requieren verificar el tag `v0.5.0` y las sumas antes de publicar. Stacks,
+requieren verificar el tag `2.0.1` y las sumas antes de publicar. Stacks,
 fwupd y snapshots están **en Beta 2** (B2-3); no se documentan aquí como
 funciones terminadas.

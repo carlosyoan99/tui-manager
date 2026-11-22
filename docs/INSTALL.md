@@ -1,6 +1,6 @@
 # Guía de instalación
 
-**TUI Manager** (`tui-manager`) — versión `0.5.0-beta.1`. Panel de control
+**TUI Manager** (`tui-manager`) — versión `2.0.1`. Panel de control
 portable para la terminal: paquetes, procesos, sistema y temas, con un catálogo
 de 179 aplicaciones en 29 categorías.
 
@@ -53,7 +53,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 sudo apt install -y build-essential debhelper dh-python python3-all python3-setuptools
 cp -r packaging/debian ./debian
 dpkg-buildpackage -us -uc -b
-sudo apt install ../tui-manager_0.5.0-1_all.deb
+sudo apt install ../tui-manager_2.0.1-1_all.deb
 ```
 
 Las dependencias de ejecución se derivan de `setup.py` mediante `dh_python3`;
@@ -70,7 +70,7 @@ cd packaging && makepkg -si
 
 El `PKGBUILD` declara `python`, `python-textual`, `python-pyyaml` y
 `python-json-logger`, así que `makepkg` resuelve las dependencias. Antes de
-publicarlo en AUR hay que verificar el tag `v0.5.0` y sustituir
+publicarlo en AUR hay que verificar el tag `2.0.1` y sustituir
 `sha256sums=('SKIP')` por la suma real. Mientras el paquete no esté en AUR,
 usa PyPI:
 
@@ -89,7 +89,7 @@ rpmdev-setuptree
 cp packaging/tui-manager.spec ~/rpmbuild/SPECS/
 spectool -g -R ~/rpmbuild/SPECS/tui-manager.spec
 rpmbuild -ba ~/rpmbuild/SPECS/tui-manager.spec
-sudo dnf install ~/rpmbuild/RPMS/noarch/tui-manager-0.5.0-1.*.noarch.rpm
+sudo dnf install ~/rpmbuild/RPMS/noarch/tui-manager-2.0.1-1.*.noarch.rpm
 ```
 
 El spec genera las dependencias desde `install_requires` (`python3dist(...)`
@@ -121,7 +121,7 @@ Añade `~/.local/bin` al `PATH` si es necesario.
 ```bash
 sudo pkg install -y python git
 cd packaging/freebsd
-make makesum          # genera distinfo; comprueba antes el tag v0.5.0
+make makesum          # genera distinfo; comprueba antes el tag 2.0.1
 sudo make install clean
 ```
 
@@ -155,7 +155,7 @@ Los nombres de paquetes difieren de Debian (p. ej. `python`, no `python3`).
 
 ```bash
 git clone https://github.com/carlosyoan/TUI-Manager.git
-cd TUI-Manager
+cd tui-manager
 python3 -m venv .venv
 . .venv/bin/activate          # en Termux: . .venv/bin/activate (con `python`)
 python -m pip install --upgrade pip
@@ -170,7 +170,7 @@ partir de `config/default.yaml` del repositorio si quieres personalizarla.
 ## Verificación
 
 ```bash
-tui-manager --version    # 0.5.0-beta.1
+tui-manager --version    # 2.0.1
 tui-manager --doctor     # SO, distro, gestor, entorno y capacidades
 tui-manager --lang es    # fuerza el idioma (es|en) para esta ejecución
 ```

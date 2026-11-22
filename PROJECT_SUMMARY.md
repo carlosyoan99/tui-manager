@@ -238,8 +238,8 @@ TUI-Manager/
 
 ### Rápida
 ```bash
-git clone https://github.com/tu-usuario/TUI-Manager.git
-cd TUI-Manager
+git clone https://github.com/carlosyoan99/tui-manager.git
+cd tui-manager
 pip install -r requirements.txt
 python main.py
 ```
@@ -265,7 +265,7 @@ Las contribuciones son bienvenidas. Por favor:
 ## 📞 Soporte
 
 - Documentación: [docs/](docs/)
-- GitHub Issues: [https://github.com/tu-usuario/TUI-Manager/issues](https://github.com/tu-usuario/TUI-Manager/issues)
+- GitHub Issues: [https://github.com/carlosyoan99/tui-manager/issues](https://github.com/carlosyoan99/tui-manager/issues)
 - Contacto: GitHub Issues — https://github.com/carlosyoan99/tui-manager/issues
 
 ## ✨ Conclusión

@@ -363,4 +363,4 @@ directorios vacíos creados por el propio comando: **nunca borra archivos tuyos*
 
 - Lee la [Documentación de la API](API.md) para detalles técnicos
 - Consulta la [Especificación Técnica](TECHNICAL_SPECS.md) para entender la arquitectura
-- Contribuye al proyecto en [GitHub](https://github.com/tu-usuario/TUI-Manager)
+- Contribuye al proyecto en [GitHub](https://github.com/carlosyoan99/tui-manager)

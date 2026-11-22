@@ -148,7 +148,7 @@ y la regla multi-equipo del usuario.
 
 ---
 
-## [0.5.0-beta.1] — 2026-11-18 — Fase Beta 1 «Pulido e integración» (completada)
+## [2.0.1] — 2026-11-18 — Fase Beta 1 «Pulido e integración» (completada)
 
 Sin funciones nuevas. Cuatro agentes en paralelo (Arquitecto, dos Implementadores
 y Documentador) más verificación final.
@@ -160,7 +160,7 @@ y Documentador) más verificación final.
   8 estados vacíos uniformes con la clase `status` y claves i18n existentes.
 - **B1-3**: `tests/manual-checklist.md` con 40 ítems sobre 10 pantallas;
   USAGE y API documentan mensajes accionables, ayuda contextual y rollback.
-- Versión del paquete y CLI a `0.5.0-beta.1`.
+- Versión del paquete y CLI a `2.0.1`.
 
 ### Validación
 - **167 tests verdes**, py_compile OK, smoke de TUI y `--doctor` correctos.
@@ -308,5 +308,5 @@ Estado base documentado en `CREATION_SUMMARY.md` (sin fecha; pre-git).
 
 ---
 
-[0.1.0-alpha.1]: https://github.com/tu-usuario/TUI-Manager/compare/0.1.0...0.1.0-alpha.1
-[0.1.0]: https://github.com/tu-usuario/TUI-Manager/releases/tag/0.1.0
+[0.1.0-alpha.1]: https://github.com/carlosyoan99/tui-manager/compare/0.1.0...0.1.0-alpha.1
+[0.1.0]: https://github.com/carlosyoan99/tui-manager/releases/tag/0.1.0

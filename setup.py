@@ -6,7 +6,7 @@ Setup script para TUI Manager
 from setuptools import setup, find_packages
 from pathlib import Path
 
-# Versión PEP 440: 0.5.0b1 equivale a 0.5.0-beta.1 (tui_manager.__version__).
+# Versión PEP 440: 2.0.1 (tui_manager.__version__).
 
 # Leer archivo de requisitos (ruta absoluta: funciona aunque se construya
 # desde otro directorio, p. ej. al generar .deb/.rpm/PKGBUILD).
