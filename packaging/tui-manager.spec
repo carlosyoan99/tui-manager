@@ -1,14 +1,14 @@
-# Descriptor RPM para Fedora. Version 0.5.0 = release 0.5.0-beta.1.
+# Descriptor RPM para Fedora. Version 2.0.1 (estable).
 # Antes de construir: verificar que el tag v%{version} existe.
 # No se ejecutó rpmbuild; este archivo solo es un descriptor.
 
 Name:           tui-manager
-Version:        0.5.0
+Version:        2.0.1
 Release:        1%{?dist}
 Summary:        Panel de control portable para la terminal
 License:        MIT
-URL:            https://github.com/carlosyoan/TUI-Manager
-Source0:        %{url}/archive/refs/tags/v%{version}.tar.gz
+URL:            https://github.com/carlosyoan99/tui-manager
+Source0:        %{url}/archive/refs/tags/%{version}.tar.gz
 BuildArch:      noarch
 
 BuildRequires:  python3-devel

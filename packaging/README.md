@@ -1,7 +1,7 @@
 # Empaquetado
 
-Descriptores por plataforma para TUI Manager. Todos usan la versión `0.5.0`,
-que corresponde a la release `0.5.0-beta.1` (`0.5.0b1` en PEP 440), y el
+Descriptores por plataforma para TUI Manager. Todos usan la versión `2.0.1`,
+que corresponde a la release `2.0.1-beta.1` (`2.0.1b1` en PEP 440), y el
 nombre `tui-manager`, igual que el paquete PyPI y el ejecutable de la CLI.
 
 | Plataforma | Archivos | Canal |
@@ -18,7 +18,7 @@ subprocesos, así que **no** se declaran bindings nativos (`python-apt`,
 
 Antes de construir o publicar cualquiera de estos descriptores hay que:
 
-1. Confirmar que el tag `v0.5.0` existe en el repositorio (los `source`/`Source0`
+1. Confirmar que el tag `v2.0.1` existe en el repositorio (los `source`/`Source0`
    y `GH_TAGNAME` apuntan a él) y que los nombres de paquetes declarados siguen
    vigentes en el repositorio de cada sistema.
 2. Sustituir `sha256sums=('SKIP')` del PKGBUILD por la suma real (`makepkg -g`).

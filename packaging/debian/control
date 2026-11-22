@@ -1,21 +1,21 @@
 Source: tui-manager
 Section: utils
 Priority: optional
-Maintainer: Carlos Yoan <carlosyoan@local>
+Maintainer: Carlos Yoan (GitHub: carlosyoan99)
 Build-Depends: debhelper-compat (= 13),
                dh-python,
                python3-all,
                python3-setuptools
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
-Homepage: https://github.com/carlosyoan/TUI-Manager
+Homepage: https://github.com/carlosyoan99/tui-manager
 
 Package: tui-manager
 Architecture: all
 Depends: ${python3:Depends}, ${misc:Depends}
 Description: portable terminal control panel for packages and processes
  Panel de control portable para la terminal: paquetes, procesos, sistema
- y temas (Linux, BSD, Termux). Version 0.5.0 (release 0.5.0-beta.1).
+ y temas (Linux, BSD, Termux). Version 2.0.1 (estable).
  .
  Las dependencias de ejecución (textual, pyyaml, python-json-logger) se
  derivan de install_requires en setup.py mediante dh_python3; no se

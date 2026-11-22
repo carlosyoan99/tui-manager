@@ -1,20 +1,20 @@
 # Esqueleto de port FreeBSD para TUI Manager.
-# Version 0.5.0 = release 0.5.0-beta.1 (PEP 440: 0.5.0b1).
+# Version 2.0.1 (estable).
 # Antes de construir: verificar que el tag v${DISTVERSION} existe y generar
 # distinfo con `make makesum`. No se ejecutó ningún build.
 
 PORTNAME=	tui-manager
-DISTVERSION=	0.5.0
+DISTVERSION=	2.0.1
 CATEGORIES=	sysutils
-MAINTAINER=	carlosyoan@local
+MAINTAINER=	carlosyoan99 (GitHub)
 COMMENT=	Portable terminal control panel for packages and processes
 
 LICENSE=	MIT
 
 USE_GITHUB=	yes
-GH_ACCOUNT=	carlosyoan
-GH_PROJECT=	TUI-Manager
-GH_TAGNAME=	v${DISTVERSION}
+GH_ACCOUNT=	carlosyoan99
+GH_PROJECT=	tui-manager
+GH_TAGNAME=	${DISTVERSION}
 
 USE_PYTHON=	autoplist distutils
 NO_ARCH=	yes
