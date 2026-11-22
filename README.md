@@ -121,8 +121,10 @@ TUI-Manager/
 
 ## Demo grabada
 
-[![demo](docs/assets/demo.cast)](docs/assets/demo.cast) — 31 s recorriendo el menú,
-paquetes, procesos, temas, catálogo y ayuda. Reproducir con:
+![TUI Manager demo](docs/assets/demo.gif)
+
+**31 s** recorriendo el menú, paquetes, procesos, temas, catálogo y ayuda.
+También disponible como grabación reproducible:
 
 ```bash
 asciinema play docs/assets/demo.cast

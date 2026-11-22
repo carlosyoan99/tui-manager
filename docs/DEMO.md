@@ -8,7 +8,7 @@ entorno de desarrollo).
 
 ## Grabación real incluida
 
-Ya hay una grabación en `docs/assets/demo.cast` (31 s, asciinema 3.2.1), creada
+Ya hay una grabación en `docs/assets/demo.gif` (GIF, generado con `agg` desde el `.cast`) y el cast reproducible `docs/assets/demo.cast` (31 s, asciinema 3.2.1), creada
 el 2026-11-22 con `tmux` 120×32. Contiene menú, paquetes, procesos, temas,
 catálogo y ayuda (licencia MIT y GitHub). Reproducir con:
 
