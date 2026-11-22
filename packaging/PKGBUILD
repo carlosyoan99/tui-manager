@@ -19,11 +19,11 @@ source=("$url/archive/refs/tags/${pkgver}.tar.gz")
 sha256sums=('SKIP')
 
 build() {
-    cd "${srcdir}/TUI-Manager-${pkgver}"
+    cd "${srcdir}/tui-manager-${pkgver}"
     python -m build --wheel --no-isolation
 }
 
 package() {
-    cd "${srcdir}/TUI-Manager-${pkgver}"
+    cd "${srcdir}/tui-manager-${pkgver}"
     python -m installer --destdir="${pkgdir}" dist/*.whl
 }

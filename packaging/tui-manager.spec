@@ -28,7 +28,7 @@ y temas, con degradación elegante según las capacidades del entorno.
 Soporta Linux, BSD y Termux (limitado).
 
 %prep
-%autosetup -n TUI-Manager-%{version}
+%autosetup -n tui-manager-%{version}
 
 %build
 %py3_build
@@ -48,5 +48,5 @@ Soporta Linux, BSD y Termux (limitado).
 %{python3_sitelib}/tui_manager-*.dist-info/
 
 %changelog
-* Wed Nov 18 2026 Carlos Yoan <carlosyoan@local> - 0.5.0-1
-- Descriptor inicial para la release 0.5.0-beta.1 (B2-4).
+* Wed Nov 18 2026 Carlos Yoan (GitHub: carlosyoan99) - 2.0.1-1
+- Release 2.0.1 (estable).
