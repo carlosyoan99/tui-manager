@@ -6,6 +6,18 @@ procesos, temas, catálogo y la ayuda. **Los comandos son sugerencias; no se han
 ejecutado para escribir este documento** (no hay herramientas de grabación en el
 entorno de desarrollo).
 
+## Grabación real incluida
+
+Ya hay una grabación en `docs/assets/demo.cast` (31 s, asciinema 3.2.1), creada
+el 2026-11-22 con `tmux` 120×32. Contiene menú, paquetes, procesos, temas,
+catálogo y ayuda (licencia MIT y GitHub). Reproducir con:
+
+```bash
+asciinema play docs/assets/demo.cast
+```
+
+Las instrucciones de abajo son para **regrabarla** si cambia la interfaz.
+
 ## Antes de grabar
 
 - Terminal de al menos **120 × 32**; fuente monoespaciada y tema legible.

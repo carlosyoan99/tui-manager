@@ -119,6 +119,15 @@ TUI-Manager/
 └── .github/workflows/ci.yml    # Linux 3.10–3.13 + FreeBSD 13.4/14.2
 ```
 
+## Demo grabada
+
+[![demo](docs/assets/demo.cast)](docs/assets/demo.cast) — 31 s recorriendo el menú,
+paquetes, procesos, temas, catálogo y ayuda. Reproducir con:
+
+```bash
+asciinema play docs/assets/demo.cast
+```
+
 ## Documentación
 
 - Para usuarios: [USAGE.md](docs/USAGE.md) · [INSTALL.md](docs/INSTALL.md) · [DEMO.md](docs/DEMO.md)
