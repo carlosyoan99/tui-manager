@@ -4,6 +4,22 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ---
 
+## [2.0.2] — 2026-11-22 — Webapps, agéntica y capacidades de hardware
+
+### Agregado
+- **G · Webapps ligeras**: 12 sitios HTTPS, accesos `.desktop`/`.url`/AppleScript
+  aislados, `WebAppsScreen` con atajo `w` desde el catálogo.
+- **H · Integración agéntica**: `--schema` y `--json all` con `schema_version`
+  y `validate_document()`; documentos listos para agentes de IA.
+- **I · Capacidades de hardware**: 7 capacidades (hibernación, ahorro, brillo,
+  batería, GPU, Bluetooth, WiFi) en Sistema, con motivo cuando faltan.
+- Demo actualizada (`docs/DEMO.md`) con tape `vhs` para 2.0.2.
+
+### Validación
+- **567 tests verdes** · `twine check` PASSED · artefactos con G/H/I incluidos.
+
+---
+
 ## [2.0.1] — 2026-11-21 — mejoras de Temas, snapshots y preparación PyPI
 
 ### Agregado

@@ -19,7 +19,9 @@ from tui_manager.main import CLI_VERSION_COMMANDS, main
 from tui_manager.core.package_adapter import Package
 from tui_manager.core.process_monitor import Process
 
-STABLE_KEYS = {'version', 'distribution', 'items'}
+STABLE_KEYS = {
+    'version', 'distribution', 'items', 'schema_version', 'command',
+}
 
 
 class _FakePackageManager:
@@ -61,6 +63,8 @@ def test_json_packages_schema(monkeypatch, capsys):
 
     assert set(doc) == STABLE_KEYS
     assert doc['version'] == __version__
+    assert doc['schema_version'] == '1.0'
+    assert doc['command'] == 'packages'
     assert doc['distribution'] == 'debian'
     assert len(doc['items']) == 1
     item = doc['items'][0]
@@ -85,6 +89,7 @@ def test_json_processes_schema(monkeypatch, capsys):
     doc = json.loads(capsys.readouterr().out)
 
     assert set(doc) == STABLE_KEYS
+    assert doc['command'] == 'processes'
     assert doc['distribution'] == 'arch'
     assert doc['items'] == [proc.to_dict()]
 
@@ -95,6 +100,7 @@ def test_build_document_with_explicit_distribution(monkeypatch):
                         lambda: _FakeProcessMonitor([]))
     doc = cli_json.build_document('processes', distribution='termux')
     assert set(doc) == STABLE_KEYS
+    assert doc['command'] == 'processes'
     assert doc['distribution'] == 'termux'
     assert doc['items'] == []
 
@@ -210,3 +216,89 @@ def test_json_rejects_unknown_kind(capsys):
     with pytest.raises(SystemExit):
         main(['--json', 'no-existe'])
     assert 'invalid choice' in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------
+# Integración agéntica: --schema y --json all.
+# --------------------------------------------------------------------------
+
+def test_cli_schema_prints_valid_json_without_subprocess(capsys, monkeypatch):
+    """--schema describe el contrato y no toca config, red ni subprocess."""
+    def forbidden(*args, **kwargs):
+        raise AssertionError('--schema no debe ejecutar subprocesos')
+
+    monkeypatch.setattr(main_module.subprocess, 'run', forbidden)
+    monkeypatch.setattr(main_module, 'Config',
+                        lambda: pytest.fail('--schema no debe leer config'))
+
+    assert main(['--schema']) == 0
+    schema = json.loads(capsys.readouterr().out)
+    assert schema['schema_version'] == '1.0'
+    assert set(schema['commands']) == {
+        'packages', 'processes', 'doctor', 'all',
+    }
+    assert {'name', 'version', 'installed'} <= set(
+        schema['commands']['packages']['items']['fields'])
+    assert {'pid', 'user', 'cpu', 'mem', 'command'} <= set(
+        schema['commands']['processes']['items']['fields'])
+    assert {'type', 'key', 'value', 'warn'} <= set(
+        schema['commands']['doctor']['items']['fields'])
+
+
+def test_json_all_returns_three_blocks(monkeypatch, capsys):
+    """--json all agrupa los tres bloques en un único documento válido."""
+    from tui_manager.core.agent_schema import validate_document
+
+    _patch_distro(monkeypatch, 'debian')
+    pkg = Package(name='htop', version='3.2.2', installed=True)
+    proc = Process(pid=42, user='root', cpu=1.5, mem=0.2, vsz=1000, rss=200,
+                   nice=0, start='10:00', time='0:01', command='python')
+    monkeypatch.setattr(cli_json, 'PackageManager',
+                        lambda distribution=None: _FakePackageManager([pkg]))
+    monkeypatch.setattr(cli_json, 'ProcessMonitor',
+                        lambda: _FakeProcessMonitor([proc]))
+    collected = []
+
+    def collect():
+        collected.append(1)
+        return {
+            'distribution': 'debian',
+            'rows': [{'key': 'doctor.os', 'value': 'Linux', 'warn': False}],
+            'suggestions': [],
+        }
+
+    monkeypatch.setattr(main_module, 'collect_doctor_data', collect)
+
+    assert main(['--json', 'all']) == 0
+    doc = json.loads(capsys.readouterr().out)
+
+    assert set(doc) == STABLE_KEYS
+    assert doc['schema_version'] == '1.0'
+    assert doc['command'] == 'all'
+    assert doc['distribution'] == 'debian'
+    assert set(doc['items']) == {'packages', 'processes', 'doctor'}
+    assert doc['items']['packages'][0]['name'] == 'htop'
+    assert doc['items']['processes'] == [proc.to_dict()]
+    assert doc['items']['doctor'][0]['key'] == 'doctor.os'
+    assert len(collected) == 1  # el doctor se recoge una sola vez
+    assert validate_document(doc, 'all') == []
+
+
+def test_json_all_is_validated_by_schema(monkeypatch):
+    """Cada bloque de --json all cumple su propio esquema."""
+    from tui_manager.core.agent_schema import validate_document
+
+    monkeypatch.setattr(cli_json, 'PackageManager',
+                        lambda distribution=None: _FakePackageManager([]))
+    monkeypatch.setattr(cli_json, 'ProcessMonitor',
+                        lambda: _FakeProcessMonitor([]))
+    monkeypatch.setattr(main_module, 'collect_doctor_data',
+                        lambda: {'distribution': 'debian', 'rows': [],
+                                 'suggestions': []})
+
+    doc = cli_json.build_document('all', distribution='debian')
+    for block in ('packages', 'processes', 'doctor'):
+        single = cli_json.build_document(block, distribution='debian')
+        assert single['items'] == doc['items'][block]
+        assert validate_document(single, block) == []
+    assert validate_document(doc, 'all') == []

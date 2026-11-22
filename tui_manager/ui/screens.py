@@ -47,6 +47,10 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from tui_manager.i18n import t
 from tui_manager.ui.app import Services
 from tui_manager.core.distribution import DistributionDetector
+from tui_manager.core.hardware import (
+    HardwareCapability,
+    detect_hardware_capabilities,
+)
 from tui_manager.core.sources_adapter import SourcesAdapter
 from tui_manager.core.snapshots import (
     DEFAULT_SNAPSHOT_DIR,
@@ -1517,15 +1521,22 @@ class SystemScreen(Screen):
         ('timezone', 'timezone'),
     )
 
-    def __init__(self, services: Services):
+    def __init__(self, services: Services, *, hardware_detector=None,
+                 hardware_runner=None, hardware_system=None):
         super().__init__()
         self.services = services
+        # Función I: inyección opcional para tests (sin subprocess real).
+        self._hardware_detector = hardware_detector
+        self._hardware_runner = hardware_runner
+        self._hardware_system = hardware_system
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         yield Label(f'[b]{screen_icon("SystemScreen")} {t("system.title")}[/] — '
                     f'{type(self.services.environment).__name__}', classes='title')
         yield ListView(id='system-menu')
+        yield Static(t('hardware.title'), id='hardware-title', classes='title')
+        yield Static(t('common.loading'), id='hardware-info', markup=False)
         yield Static(t('system.keys'), id='system-status', classes='status', markup=False)
         yield Footer()
 
@@ -1553,6 +1564,43 @@ class SystemScreen(Screen):
         self.query_one('#system-status', Static).update(_status(
             f'{t("common.actions")}: {enabled}', t('system.keys'),
             empty=enabled == 0))
+        # Función I: detección en worker, nunca en el hilo de la UI.
+        self._load_hardware()
+
+    @work(thread=True, exclusive=False)
+    def _load_hardware(self) -> None:
+        """Detecta capacidades en segundo plano y actualiza la sección."""
+        detector = self._hardware_detector or detect_hardware_capabilities
+        try:
+            caps = detector(runner=self._hardware_runner,
+                            system=self._hardware_system)
+        except Exception as exc:
+            logger.debug('detección de hardware no disponible: %s', exc)
+            caps = {}
+        self.app.call_from_thread(self._render_hardware, caps)
+
+    def _render_hardware(self, caps) -> None:
+        """Pinta ✓ / motivo por capacidad; sin datos degrada a un mensaje."""
+        try:
+            widget = self.query_one('#hardware-info', Static)
+        except NoMatches:
+            return
+        if not caps:
+            widget.update(t('hardware.empty'))
+            return
+        lines = []
+        for cap in HardwareCapability:
+            label = t(f'hardware.capability.{cap.name.lower()}')
+            if caps.get(cap) is True:
+                lines.append(f'✓ {label} — {t("hardware.available")}')
+                continue
+            reason = caps.get(cap)
+            if not isinstance(reason, str) or not reason:
+                reason = t('hardware.unavailable')
+            elif reason.startswith('hardware.reason.'):
+                reason = t(reason)
+            lines.append(f'✗ {label} — {reason}')
+        widget.update('\n'.join(lines))
 
     @on(ListView.Selected)
     def run_action(self, event: ListView.Selected) -> None:
@@ -2125,6 +2173,7 @@ class AppsScreen(Screen):
         ('c', 'category', t('apps.category')),
         ('f', 'filter', t('common.search')),
         Binding('/', 'filter', show=False),
+        ('w', 'webapps', t('menu.apps.webapps')),
         ('?', 'help', t('common.help')),
         ('escape', 'back', t('common.back')),
     ]
@@ -2204,6 +2253,12 @@ class AppsScreen(Screen):
     def action_help(self) -> None:
         """?: ayuda contextual del catálogo de apps."""
         _open_context_help(self)
+
+    def action_webapps(self) -> None:
+        """w: webapps ligeras (acción del catálogo, no entrada del menú)."""
+        # Import diferido: webapps_screen reutiliza ConfirmScreen de este módulo.
+        from tui_manager.ui.webapps_screen import WebAppsScreen
+        self.app.push_screen(WebAppsScreen(self.services))
 
     def action_back(self) -> None:
         self.app.pop_screen()

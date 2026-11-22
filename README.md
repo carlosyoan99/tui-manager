@@ -5,7 +5,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20BSD%20%7C%20macOS%20%7C%20Windows%20%7C%20Termux-lightgrey.svg)](https://github.com/carlosyoan99/tui-manager)
 
-**Versión actual: 2.0.1 (estable)** · 469 tests verdes en 4 equipos · CI verde en Linux + FreeBSD.
+**Versión actual: 2.0.2 (estable)** · 567 tests verdes · CI verde en Linux + FreeBSD.
 
 ## ¿Qué es?
 
@@ -23,7 +23,7 @@ La diferencia con Omarchy: Omarchy está atado a Arch + Hyprland + Quickshell. T
 
 ```bash
 tm              # abre la TUI (comando disponible en tus 4 equipos)
-tm --version    # tui-manager 2.0.1
+tm --version    # tui-manager 2.0.2
 tm --doctor     # diagnóstico: SO, distro, gestor, entorno, CLIs, capacidades, elevación
 tm --quickstart # recorrido guiado por las 10 entradas del menú
 tm --json doctor|packages|processes   # salida estructurada para scripts/agentes

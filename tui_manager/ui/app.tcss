@@ -164,6 +164,15 @@ InputScreen {
     background: $surface;
 }
 
+/* Función G: webapps ligeras. Hereda el estilo común de listas y estado. */
+WebAppsScreen Input#webapps-search {
+    height: 3;
+}
+
+WebAppsScreen LoadingIndicator#webapps-loading {
+    height: 1;
+}
+
 /* Variantes semánticas para mensajes. */
 
 .success {

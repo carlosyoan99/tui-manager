@@ -8,8 +8,10 @@ Uso:
     tui-manager --doctor   diagnóstico del entorno (SO, distro, gestor,
                            entorno de escritorio, capacidades, versiones de
                            CLIs, elevación)
-    tui-manager --json X   datos estructurados (X=packages|processes|doctor)
-                           como JSON a stdout, para scripts y agentes
+    tui-manager --json X   datos estructurados
+                           (X=packages|processes|doctor|all) como JSON a
+                           stdout, para scripts y agentes
+    tui-manager --schema   imprime el esquema JSON de --schema/--json y sale
     tui-manager --quickstart  recorrido guiado por las 10 entradas del menú
     tui-manager --lang es  fuerza el idioma (es|en) para esta ejecución
 
@@ -19,6 +21,7 @@ Inspired: Omarchy Quattro. Portable: Linux, BSD y Termux (limitado).
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import platform
 import shutil
@@ -26,6 +29,7 @@ import subprocess
 import sys
 
 from tui_manager import __version__
+from tui_manager.core.agent_schema import AGENT_SCHEMA
 from tui_manager.core.config import Config
 from tui_manager.core.distribution import DistributionDetector, DistributionError
 from tui_manager.core.environment import EnvironmentDetector
@@ -129,10 +133,14 @@ def build_parser() -> argparse.ArgumentParser:
                         help='muestra la versión y sale')
     parser.add_argument('--doctor', action='store_true',
                         help='diagnóstico del entorno y sale')
-    parser.add_argument('--json', choices=('packages', 'processes', 'doctor'),
+    parser.add_argument('--json',
+                        choices=('packages', 'processes', 'doctor', 'all'),
                         default=None, metavar='KIND',
-                        help='datos estructurados (packages|processes|doctor) '
+                        help='datos estructurados '
+                             '(packages|processes|doctor|all) '
                              'como JSON en stdout')
+    parser.add_argument('--schema', action='store_true',
+                        help='imprime el esquema JSON para agentes y sale')
     parser.add_argument('--quickstart', action='store_true',
                         help='recorrido guiado por el menú y sale')
     parser.add_argument('--lang', choices=available_languages(), default=None,
@@ -279,6 +287,12 @@ def main(argv=None) -> int:
 
     if args.version:
         print(f'tui-manager {__version__}')
+        return 0
+
+    if args.schema:
+        # Contrato legible por agentes: JSON puro en stdout, sin logging ni
+        # subprocess. No depende del idioma ni de la distro detectada.
+        print(json.dumps(AGENT_SCHEMA, ensure_ascii=False, indent=2))
         return 0
 
     config = Config()

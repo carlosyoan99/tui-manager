@@ -4,10 +4,17 @@ Salida ``--json`` de TUI Manager para scripts y agentes.
 Contrato estable (independiente del tipo solicitado)::
 
     {
-      "version": "1.1.0",
+      "version": "2.0.1",
+      "schema_version": "1.0",
+      "command": "packages",
       "distribution": "debian",
       "items": [ ... ]
     }
+
+``--json all`` devuelve los tres bloques en un único documento: ``items`` es
+un objeto con las claves ``packages``, ``processes`` y ``doctor``, cada una
+con su lista de entradas. El esquema completo está en
+:mod:`tui_manager.core.agent_schema` y se expone con ``--schema``.
 
 Garantías:
 
@@ -28,12 +35,13 @@ import logging
 import sys
 
 from tui_manager import __version__
+from tui_manager.core.agent_schema import SCHEMA_VERSION
 from tui_manager.core.distribution import DistributionDetector
 from tui_manager.core.package_manager import PackageManager
 from tui_manager.core.process_monitor import ProcessMonitor
 
 #: Valores aceptados por ``--json`` (mantener sincronizados con main.py).
-JSON_KINDS = ('packages', 'processes', 'doctor')
+JSON_KINDS = ('packages', 'processes', 'doctor', 'all')
 
 
 class JsonOutputError(Exception):
@@ -97,13 +105,33 @@ def _detect_distribution():
 
 
 def build_document(kind: str, distribution=None) -> dict:
-    """Construye el documento ``{version, distribution, items}``.
+    """Construye el documento estructurado para ``kind``.
 
     ``kind`` debe estar en :data:`JSON_KINDS`. Si se proporciona
-    ``distribution`` se usa tal cual (evita detectarla dos veces).
+    ``distribution`` se usa tal cual (evita detectarla dos veces). El
+    documento siempre incluye ``schema_version`` y ``command`` además de
+    las claves estables ``version``, ``distribution`` e ``items``.
     """
     if kind not in JSON_KINDS:
         raise JsonOutputError(f'tipo JSON desconocido: {kind!r}')
+
+    if kind == 'all':
+        # Un único documento con los tres bloques; la distro se detecta una
+        # sola vez y se reutiliza en cada bloque (el doctor se recolecta una
+        # sola vez a través de build_document('doctor')).
+        if distribution is None:
+            distribution = _detect_distribution()
+        blocks = {
+            block: build_document(block, distribution=distribution)
+            for block in ('packages', 'processes', 'doctor')
+        }
+        return {
+            'version': __version__,
+            'schema_version': SCHEMA_VERSION,
+            'command': 'all',
+            'distribution': distribution,
+            'items': {block: doc['items'] for block, doc in blocks.items()},
+        }
 
     if kind == 'doctor':
         # Import diferido: main.py importa cli_json desde main(); hacerlo aquí
@@ -118,6 +146,9 @@ def build_document(kind: str, distribution=None) -> dict:
             distribution = _detect_distribution()
         if kind == 'packages':
             manager = PackageManager(distribution=distribution)
+            # Ruta no interactiva: nunca pedir contraseña ni suspender la TUI.
+            from tui_manager.main import configure_non_interactive
+            configure_non_interactive(manager)
             items = [_package_to_dict(p)
                      for p in manager.get_installed_packages()]
         else:  # kind == 'processes'
@@ -126,6 +157,8 @@ def build_document(kind: str, distribution=None) -> dict:
 
     return {
         'version': __version__,
+        'schema_version': SCHEMA_VERSION,
+        'command': kind,
         'distribution': distribution,
         'items': items,
     }
